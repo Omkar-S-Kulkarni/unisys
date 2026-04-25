@@ -1,0 +1,13 @@
+{
+  "decision_governor": {
+    "priority_weights": {
+      "w_risk": 0.4,
+      "w_vulnerability": 0.3,
+      "w_elderly": 0.2,
+      "w_road_availability": 0.1
+    },
+    "replan_cooldown_ticks": 2,
+    "max_shelter_capacity_pct": 0.9,
+    "risk_threshold_for_replan": 7.5
+  }
+}

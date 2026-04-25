@@ -1,0 +1,108 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ADEO City Model — Zone Schema Contract",
+  "description": "Master inter-agent contract. Every field name is verified from the actual project files: city_model.json (Disha), road_adjacency.json (Vivek), vulnerability_agent.py (Disha), mobility_agent.py (Vivek).",
+  "type": "object",
+  "required": ["zones", "shelters"],
+
+  "_field_source_map": {
+    "zone.id":                    "city_model.json → zones[].id (e.g. 'Z01')",
+    "zone.name":                  "city_model.json → zones[].name (e.g. 'Whitefield')",
+    "zone.population":            "city_model.json → zones[].population",
+    "zone.elderly_pct":           "city_model.json → zones[].elderly_pct — also read by vulnerability_agent.py",
+    "zone.population_density":    "city_model.json → zones[].population_density — also read by vulnerability_agent.py",
+    "zone.elevation_tier":        "city_model.json → zones[].elevation_tier ('high'|'mid'|'low')",
+    "zone.elevation_m":           "city_model.json → zones[].elevation_m",
+    "zone.hospital_count":        "city_model.json → zones[].hospital_count — also read by vulnerability_agent.py",
+    "zone.hospitals":             "city_model.json → zones[].hospitals [{name, beds}]",
+    "zone.shelters":              "city_model.json → zones[].shelters [{name, capacity, current_occupancy}]",
+    "zone.shelter_capacity_total": "city_model.json → zones[].shelter_capacity_total",
+    "zone.flood_risk_base":       "city_model.json → zones[].flood_risk_base",
+    "zone.area_km2":              "city_model.json → zones[].area_km2",
+
+    "zone.risk_score":            "Runtime — injected per tick from Risk Agent (0–10 float). Currently simulated in backend/main.py.",
+    "zone.vulnerability_score":   "Runtime — computed by vulnerability_agent.py → ZoneScore.vulnerability_score (0–10 float)",
+
+    "zone.road_links":            "Derived at runtime from road_adjacency.json → edges[].from / edges[].to (zone names, not IDs)",
+
+    "shelter.id":                 "city_model.json → shelters[].id (e.g. 'S01') — road_adjacency.json uses 'S1' style IDs",
+    "shelter.name":               "city_model.json → shelters[].name",
+    "shelter.zone_id":            "city_model.json → shelters[].zone_id — road_adjacency.json uses 'zone' key",
+    "shelter.capacity":           "city_model.json → shelters[].capacity",
+    "shelter.current_occupancy":  "city_model.json → shelters[].current_occupancy",
+    "shelter.has_medical":        "city_model.json → shelters[].has_medical (bool)"
+  },
+
+  "properties": {
+    "meta": {
+      "type": "object",
+      "properties": {
+        "city": { "type": "string" },
+        "version": { "type": "string" },
+        "data_mode": { "type": "string", "enum": ["synthetic", "real"] },
+        "source_notes": { "type": "string" },
+        "last_updated": { "type": "string", "format": "date" }
+      }
+    },
+    "zones": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "population", "elderly_pct", "elevation_tier"],
+        "properties": {
+          "id":                     { "type": "string", "description": "Zone ID, e.g. 'Z01'" },
+          "name":                   { "type": "string", "description": "Zone name, e.g. 'Whitefield'" },
+          "population":             { "type": "integer", "minimum": 0 },
+          "area_km2":               { "type": "number", "minimum": 0 },
+          "elderly_pct":            { "type": "number", "minimum": 0, "maximum": 100 },
+          "population_density":     { "type": "integer", "minimum": 0 },
+          "elevation_tier":         { "type": "string", "enum": ["high", "mid", "low"] },
+          "elevation_m":            { "type": "integer" },
+          "hospitals":              {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "beds": { "type": "integer" }
+              }
+            }
+          },
+          "hospital_count":         { "type": "integer", "minimum": 0 },
+          "shelters":               {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name":              { "type": "string" },
+                "capacity":          { "type": "integer" },
+                "current_occupancy": { "type": "integer" }
+              }
+            }
+          },
+          "shelter_capacity_total": { "type": "integer", "minimum": 0 },
+          "flood_risk_base":        { "type": "number", "minimum": 0, "maximum": 10 },
+
+          "risk_score":             { "type": "number", "minimum": 0, "maximum": 10, "description": "Injected at runtime per tick" },
+          "vulnerability_score":    { "type": "number", "minimum": 0, "maximum": 10, "description": "Computed by Vulnerability Agent" },
+          "road_links":             { "type": "array", "items": { "type": "string" }, "description": "Adjacent zone names from road_adjacency.json" }
+        }
+      }
+    },
+    "shelters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "zone_id", "capacity"],
+        "properties": {
+          "id":                 { "type": "string" },
+          "name":               { "type": "string" },
+          "zone_id":            { "type": "string" },
+          "capacity":           { "type": "integer" },
+          "current_occupancy":  { "type": "integer" },
+          "has_medical":        { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

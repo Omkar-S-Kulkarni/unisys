@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+websockets
+networkx
+scikit-learn
+numpy
+scipy
+pandas
+pydantic
+pydantic-settings
+anyio
+click
+starlette
+watchfiles
+python-multipart

@@ -1,0 +1,77 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+  darkMode: "class",
+  theme: {
+    extend: {
+      colors: {
+        "on-secondary-fixed": "#651900",
+        "secondary": "#ff7346",
+        "background": "#0e0e10",
+        "on-secondary-fixed-variant": "#962a00",
+        "on-secondary": "#420d00",
+        "on-secondary-container": "#fff6f3",
+        "surface-container-high": "#1f1f22",
+        "primary-dim": "#00edb4",
+        "inverse-on-surface": "#565457",
+        "primary": "var(--color-primary, #00d1ff)",
+        "on-primary-fixed-variant": "#00664c",
+        "tertiary-fixed": "#c49fff",
+        "secondary-dim": "#ff7346",
+        "on-surface": "#f9f5f8",
+        "on-tertiary": "#2e0062",
+        "secondary-fixed": "#ffc4b3",
+        "inverse-surface": "#fcf8fb",
+        "surface-tint": "#aaffdc",
+        "surface-container-low": "#131315",
+        "tertiary": "#b586ff",
+        "on-primary": "#00654b",
+        "primary-fixed-dim": "#00edb4",
+        "on-surface-variant": "#adaaad",
+        "on-error-container": "#ffa8a3",
+        "surface-container-highest": "#262528",
+        "error-container": "#9f0519",
+        "primary-container": "#00fdc1",
+        "on-tertiary-fixed-variant": "#4e009f",
+        "error-dim": "#d7383b",
+        "primary-fixed": "#00fdc1",
+        "surface": "#0e0e10",
+        "secondary-fixed-dim": "#ffb199",
+        "tertiary-fixed-dim": "#b98dff",
+        "on-tertiary-fixed": "#23004e",
+        "error": "#ff716c",
+        "tertiary-dim": "#8f4fed",
+        "on-primary-fixed": "#004734",
+        "outline": "#767577",
+        "surface-container-lowest": "#000000",
+        "on-error": "#490006",
+        "outline-variant": "#48474a",
+        "surface-dim": "#0e0e10",
+        "on-primary-container": "#005c44",
+        "on-background": "#f9f5f8",
+        "on-tertiary-container": "#000000",
+        "surface-variant": "#262528",
+        "inverse-primary": "#006c51",
+        "surface-container": "#19191c",
+        "surface-bright": "#2c2c2f",
+        "tertiary-container": "#9f60fe",
+        "secondary-container": "#ae3200"
+      },
+      borderRadius: {
+        "DEFAULT": "0px",
+        "lg": "0px",
+        "xl": "0px",
+        "full": "9999px"
+      },
+      fontFamily: {
+        "headline": ["Space Grotesk", "sans-serif"],
+        "body": ["Inter", "sans-serif"],
+        "label": ["JetBrains Mono", "monospace"]
+      }
+    },
+  },
+  plugins: [
+    require('@tailwindcss/forms'),
+    require('@tailwindcss/container-queries')
+  ],
+}
