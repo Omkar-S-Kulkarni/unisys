@@ -333,7 +333,7 @@ class DecisionGovernor:
             if route_destination:
                 # Try to match route destination to a known shelter
                 for s in shelters_from_model:
-                    if s["id"] == route_destination:
+                    if s["zone_id"] == route_destination:
                         current_occ = shelter_usage.get(s["id"], 0)
                         # Assign if shelter has ANY space left (even if not for whole population)
                         if current_occ < s["capacity"]:
