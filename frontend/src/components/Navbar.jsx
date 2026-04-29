@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useGlobalSocket } from "../context/SocketContext";
 
-export default function Navbar({ theme, setTheme, onSevereClick }) {
+export default function Navbar({ theme, setTheme, onSevereClick, analysisMode, setAnalysisMode }) {
   const { sendCommand, simulationState } = useGlobalSocket();
   const { scenario, isRunning } = simulationState || {};
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -124,9 +124,42 @@ export default function Navbar({ theme, setTheme, onSevereClick }) {
                       </button>
                     </div>
                   </div>
+                  <div className="rounded-2xl border border-gray-800/60 bg-surface-muted p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-[11px] uppercase tracking-[0.24em] text-gray-400">
+                          Analysis Mode
+                        </div>
+                        <div className="text-sm font-semibold text-surface-foreground">
+                          {analysisMode ? "Enabled" : "Disabled"}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setAnalysisMode(!analysisMode)}
+                        className={`rounded-full px-3 py-1 text-[10px] font-black transition-all ${analysisMode ? 'bg-indigo-600 text-white shadow-[0_0_10px_rgba(79,70,229,0.4)]' : 'bg-gray-800 text-gray-400'}`}
+                      >
+                        {analysisMode ? "ON" : "OFF"}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-gray-800/60 bg-surface-muted p-3">
+                    <div className="flex flex-col gap-2">
+                       <div className="text-[11px] uppercase tracking-[0.24em] text-orange-400">
+                          Emergency Actions
+                       </div>
+                       <button
+                         onClick={() => {
+                           sendCommand("SEND_EMERGENCY_NOTIFICATIONS", {});
+                           setSettingsOpen(false);
+                         }}
+                         className="w-full rounded-xl bg-orange-600/20 border border-orange-500/50 py-2 text-[10px] font-black text-orange-400 transition-all hover:bg-orange-600/30 active:scale-95"
+                       >
+                         SEND EMERGENCY ALERTS
+                       </button>
+                    </div>
+                  </div>
                   <div className="rounded-2xl border border-gray-800/60 bg-surface-muted p-3 text-[11px] text-gray-400">
-                    Use the settings menu to switch between light and dark UI styles instantly.
-                    Your preference is stored locally and restored when you return.
+                    Use the settings menu to manage system alerts and switch between UI styles.
                   </div>
                 </div>
               </div>
@@ -140,10 +173,6 @@ export default function Navbar({ theme, setTheme, onSevereClick }) {
           </div>
         </div>
 
-        {/* Avatar */}
-        <div className="w-9 h-9 border border-gray-800 bg-gray-900/50 flex items-center justify-center grayscale opacity-80 hover:grayscale-0 hover:opacity-100 transition-all cursor-pointer">
-          <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix&backgroundColor=454545" alt="Avatar" className="w-full h-full p-1" />
-        </div>
       </div>
     </header>
   );

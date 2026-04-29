@@ -20,6 +20,7 @@ from schema_validator import (
     get_contract_subschema,
     validate_payload,
 )
+from twilio.rest import Client
 
 app = FastAPI()
 
@@ -87,6 +88,39 @@ sg.set_ollama_client(ollama_client)
 mobility_agent = MobilityAgent()
 decision_governor = DecisionGovernor(config=config, city_model=city_model)
 risk_agent = RiskForecastAgent(os.path.join(_ROOT, "agents", "data"), ollama_client=ollama_client)
+
+# ── Initialize Twilio Client ──────────────────────────────────────────────────
+twilio_config = config.get("twilio", {})
+twilio_enabled = twilio_config.get("enabled", False)
+if twilio_enabled:
+    twilio_client = Client(twilio_config["account_sid"], twilio_config["auth_token"])
+else:
+    twilio_client = None
+
+async def send_twilio_notification(zone_name, safety_score, shelter_name, route_name):
+    if not twilio_client:
+        logger.info(f"Twilio disabled. Simulated notification for {zone_name}: Score {safety_score}/10, Shelter: {shelter_name}, Route: {route_name}")
+        return True
+    
+    try:
+        message_body = (
+            f"ADEO EMERGENCY ALERT: {zone_name}\n"
+            f"Safety Score: {safety_score}/10\n"
+            f"Nearest Shelter: {shelter_name}\n"
+            f"Safest Route: {route_name}\n"
+            f"Please proceed to the shelter immediately."
+        )
+        
+        message = twilio_client.messages.create(
+            body=message_body,
+            from_=twilio_config["from_number"],
+            to=twilio_config["to_number"]
+        )
+        logger.info(f"Twilio message sent to {twilio_config['to_number']} for {zone_name}: {message.sid}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send Twilio message for {zone_name}: {str(e)}")
+        return False
 
 
 # ── WebSocket Clients ────────────────────────────────────────────────────────
@@ -596,6 +630,35 @@ async def websocket_endpoint(websocket: WebSocket):
                     payload.get("to"),
                     payload.get("reason", "Manual Override via Dashboard")
                 )
+            elif message["type"] == "SEND_EMERGENCY_NOTIFICATIONS":
+                # Get the latest evacuation plan
+                last_plan = decision_governor.get_last_plan()
+                if not last_plan:
+                    continue
+                
+                notifications_sent = 0
+                for entry in last_plan.get("evacuation_sequence", []):
+                    z_name = entry.get("zone_name")
+                    risk = entry.get("risk_score", 0.0)
+                    # Safety score is 10 - risk score
+                    safety_score = round(10.0 - risk, 1)
+                    
+                    # Only notify zones with significant risk (e.g., risk >= 4 or safety <= 6)
+                    if risk >= 4.0:
+                        shelter = entry.get("assigned_shelter", "TBD")
+                        route = entry.get("assigned_route", "Direct")
+                        
+                        # Find shelter name from ID if possible
+                        shelter_name = shelter
+                        for s in city_model.get("shelters", []):
+                            if s["id"] == shelter:
+                                shelter_name = s["name"]
+                                break
+                        
+                        await send_twilio_notification(z_name, safety_score, shelter_name, route)
+                        notifications_sent += 1
+                
+                logger.info(f"Sent emergency notifications to {notifications_sent} zones.")
     except WebSocketDisconnect:
         clients.discard(websocket)
 

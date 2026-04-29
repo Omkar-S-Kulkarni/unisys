@@ -37,7 +37,7 @@ export default function SevereZoneOverlay({ isOpen, onClose }) {
             <div className="h-6 w-px bg-gray-800"></div>
             <div>
               <h2 className="text-xl font-black text-white tracking-tight uppercase">High-Risk Zone Analysis</h2>
-              <p className="text-[10px] text-gray-500 font-mono tracking-widest mt-0.5">FILTER_CRITERIA: RISK_SCORE >= 5.0</p>
+              <p className="text-[10px] text-gray-500 font-mono tracking-widest mt-0.5">FILTER_CRITERIA: RISK_SCORE &gt= 5.0</p>
             </div>
           </div>
           <button 
