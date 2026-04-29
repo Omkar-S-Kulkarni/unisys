@@ -3,7 +3,8 @@ import cityData from '../data/city-model.json';
 import { useGlobalSocket } from '../context/SocketContext';
 
 export default function ZonalAnalysis() {
-  const { data } = useGlobalSocket();
+  const { data, simulationState } = useGlobalSocket();
+  const { scenario } = simulationState || {};
   const [zoneStates, setZoneStates] = useState([]);
   const [riskScores, setRiskScores] = useState({});
 
@@ -17,7 +18,7 @@ export default function ZonalAnalysis() {
   }, [data]);
 
   // Merge static demographic data with live state
-  const mergedZones = cityData.zones.map(baseZone => {
+  const allMergedZones = cityData.zones.map(baseZone => {
     const liveState = zoneStates.find(z => z.zone_name === baseZone.name) || {};
     const risk = riskScores[baseZone.name] !== undefined ? riskScores[baseZone.name] : baseZone.flood_risk_base;
     return {
@@ -26,6 +27,11 @@ export default function ZonalAnalysis() {
       risk_score: risk
     };
   });
+
+  // Filter if severe button is clicked (scenario is severe_flood)
+  const mergedZones = scenario === "severe_flood" 
+    ? allMergedZones.filter(z => z.risk_score >= 5)
+    : allMergedZones;
 
   // Sort by vulnerability descending
   mergedZones.sort((a, b) => b.vulnerability_score - a.vulnerability_score);

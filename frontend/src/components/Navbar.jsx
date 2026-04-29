@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { useGlobalSocket } from "../context/SocketContext";
 
-export default function Navbar({ theme, setTheme }) {
+export default function Navbar({ theme, setTheme, onSevereClick }) {
   const { sendCommand, simulationState } = useGlobalSocket();
   const { scenario, isRunning } = simulationState || {};
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const handleScenarioChange = (newScenario) => {
     sendCommand("CHANGE_SCENARIO", newScenario);
+    if (newScenario === "severe_flood" && onSevereClick) {
+      onSevereClick();
+    }
   };
 
   const handleControl = (controlType) => {

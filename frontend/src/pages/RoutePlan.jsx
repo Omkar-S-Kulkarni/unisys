@@ -41,18 +41,34 @@ const SHELTER_COORDS = {
 
 const getLatLng = (id) => GEO_COORDS[id] || SHELTER_COORDS[id];
 
-const zoneIcon = L.divIcon({
-  className: 'custom-icon',
-  html: `<div style="width: 12px; height: 12px; background-color: #aaffdc; border-radius: 50%; border: 2px solid #000; box-shadow: 0 0 8px #aaffdc;"></div>`,
-  iconSize: [12, 12],
-  iconAnchor: [6, 6]
-});
+const getZoneIcon = (risk) => {
+  let color = '#aaffdc'; // Stable (Emerald)
+  let shadow = '#aaffdc';
+  
+  if (risk >= 9) {
+    color = '#ef4444'; // Red
+    shadow = '#ef4444';
+  } else if (risk >= 7) {
+    color = '#f97316'; // Orange
+    shadow = '#f97316';
+  } else if (risk >= 5) {
+    color = '#eab308'; // Yellow
+    shadow = '#eab308';
+  }
+
+  return L.divIcon({
+    className: 'custom-icon',
+    html: `<div style="width: 14px; height: 14px; background-color: ${color}; border-radius: 50%; border: 2px solid #000; box-shadow: 0 0 10px ${shadow}; transition: all 0.5s ease;"></div>`,
+    iconSize: [14, 14],
+    iconAnchor: [7, 7]
+  });
+};
 
 const shelterIcon = L.divIcon({
   className: 'custom-icon',
-  html: `<div style="width: 14px; height: 14px; background-color: #ffffff; border-radius: 2px; border: 2px solid #aaffdc; box-shadow: 0 0 10px #ffffff;"></div>`,
-  iconSize: [14, 14],
-  iconAnchor: [7, 7]
+  html: `<div style="width: 16px; height: 16px; background-color: #ffffff; border-radius: 2px; border: 2px solid #aaffdc; box-shadow: 0 0 12px #ffffff;"></div>`,
+  iconSize: [16, 16],
+  iconAnchor: [8, 8]
 });
 
 const EvacuationUnit = ({ path, delay = 0 }) => {
@@ -365,16 +381,29 @@ export default function RoutePlan() {
             })}
 
             {/* Render Zones (Markers) */}
-            {Object.entries(GEO_COORDS).filter(([k]) => k.startsWith('Z')).map(([id, coord]) => {
+            {Object.entries(GEO_COORDS).filter(([k]) => k.startsWith('Z')).filter(([id]) => {
+              const { scenario } = data?.simulation_state || {};
+              if (scenario !== 'severe_flood') return true;
+              
               const zone = cityData.zones.find(z => z.id === id);
+              const risk = (data?.risk_scores && data.risk_scores[zone?.name]) !== undefined 
+                ? data.risk_scores[zone?.name] 
+                : zone?.flood_risk_base;
+              
+              return risk >= 5;
+            }).map(([id, coord]) => {
+              const zone = cityData.zones.find(z => z.id === id);
+              const risk = (data?.risk_scores && data.risk_scores[zone?.name]) !== undefined 
+                ? data.risk_scores[zone?.name] 
+                : zone?.flood_risk_base;
               const zoneName = zone?.name || id;
               return (
-                <Marker key={id} position={coord} icon={zoneIcon}>
+                <Marker key={id} position={coord} icon={getZoneIcon(risk)}>
                   <Popup className="custom-popup">
                     <div className="p-1">
                       <div className="text-[10px] font-black text-primary tracking-widest uppercase mb-1">{zoneName}</div>
                       <div className="text-[8px] text-gray-400 font-mono">POP: {zone?.population?.toLocaleString()}</div>
-                      <div className="text-[8px] text-gray-400 font-mono">RISK: {zone?.flood_risk_base}</div>
+                      <div className="text-[8px] text-gray-400 font-mono">RISK: {risk?.toFixed(1)}</div>
                     </div>
                   </Popup>
                 </Marker>
@@ -399,9 +428,28 @@ export default function RoutePlan() {
 
           </MapContainer>
 
-          <div className="absolute bottom-6 left-6 flex flex-col gap-1 pointer-events-none z-[1000]">
-            <span className="text-[12px] font-black text-black tracking-[0.4em] uppercase bg-primary px-2 py-0.5 shadow-lg">BENGALURU_METRO</span>
-            <span className="text-[8px] font-mono text-primary bg-black/80 px-2 py-0.5 tracking-[0.2em] uppercase">Geo_Tactical_Overlay_Enabled</span>
+          <div className="absolute bottom-6 left-6 flex flex-col gap-3 pointer-events-none z-[1000]">
+            <div className="flex flex-col gap-1">
+              <span className="text-[12px] font-black text-black tracking-[0.4em] uppercase bg-primary px-2 py-0.5 shadow-lg w-fit">BENGALURU_METRO</span>
+              <span className="text-[8px] font-mono text-primary bg-black/80 px-2 py-0.5 tracking-[0.2em] uppercase w-fit">Geo_Tactical_Overlay_Enabled</span>
+            </div>
+
+            <div className="bg-black/80 backdrop-blur-md border border-white/10 p-2.5 rounded flex flex-col gap-2 pointer-events-auto">
+               <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5 pb-1 mb-0.5">Risk Legend</span>
+               <div className="flex gap-4">
+                  {[
+                    { label: 'Critical', color: 'bg-[#ef4444]' },
+                    { label: 'High', color: 'bg-[#f97316]' },
+                    { label: 'Elevated', color: 'bg-[#eab308]' },
+                    { label: 'Stable', color: 'bg-[#aaffdc]' }
+                  ].map(item => (
+                    <div key={item.label} className="flex items-center gap-1.5">
+                      <div className={`w-2 h-2 rounded-full ${item.color} shadow-[0_0_5px_currentColor]`}></div>
+                      <span className="text-[7px] text-gray-400 uppercase font-bold tracking-tighter">{item.label}</span>
+                    </div>
+                  ))}
+               </div>
+            </div>
           </div>
         </div>
 

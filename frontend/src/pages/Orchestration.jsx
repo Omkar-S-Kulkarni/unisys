@@ -253,6 +253,14 @@ export default function Orchestration() {
   const topEvacOrders = evacSequence.slice(0, 5);
 
   const vulnerabilityRanked = [...zoneStates]
+    .filter(zs => {
+       const { scenario } = data?.simulation_state || {};
+       if (scenario !== 'severe_flood') return true;
+       
+       const baseZone = cityData.zones.find(z => z.name === zs.zone_name);
+       const risk = riskScores[zs.zone_name] !== undefined ? riskScores[zs.zone_name] : baseZone?.flood_risk_base;
+       return risk >= 5;
+    })
     .sort((a, b) => (b.vulnerability_score || 0) - (a.vulnerability_score || 0))
     .slice(0, 5);
 
@@ -311,7 +319,13 @@ export default function Orchestration() {
         <div className="flex-[3] flex flex-col gap-6 overflow-y-auto no-scrollbar">
 
           <div className="grid grid-cols-4 gap-4">
-            {zones.map(zone => (
+            {zones.filter(zone => {
+              const { scenario } = data?.simulation_state || {};
+              if (scenario !== 'severe_flood') return true;
+              
+              const risk = riskScores[zone.name] !== undefined ? riskScores[zone.name] : zone.flood_risk_base;
+              return risk >= 5;
+            }).map(zone => (
               <ZoneCard key={zone.id} zone={zone} liveRisk={getLiveRisk(zone)} llmData={getLlmData(zone)} />
             ))}
           </div>
