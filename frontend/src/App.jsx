@@ -10,10 +10,12 @@ import RoutePlan from "./pages/RoutePlan";
 import PostAnalysis from "./pages/PostAnalysis";
 import { SocketProvider } from "./context/SocketContext";
 import SevereZoneOverlay from "./components/SevereZoneOverlay";
+import AnalysisPanel from "./components/AnalysisPanel";
 
 export default function App() {
   const [theme, setTheme] = useState("dark");
   const [showSevereOverlay, setShowSevereOverlay] = useState(false);
+  const [analysisMode, setAnalysisMode] = useState(false);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("adeo_theme");
@@ -32,7 +34,13 @@ export default function App() {
       <div className="h-screen flex flex-col overflow-hidden bg-surface text-surface-foreground">
 
         {/* Top Navbar */}
-        <Navbar theme={theme} setTheme={setTheme} onSevereClick={() => setShowSevereOverlay(true)} />
+        <Navbar 
+          theme={theme} 
+          setTheme={setTheme} 
+          onSevereClick={() => setShowSevereOverlay(true)} 
+          analysisMode={analysisMode}
+          setAnalysisMode={setAnalysisMode}
+        />
 
         {/* Main Layout */}
         <div className="flex flex-1 overflow-hidden">
@@ -58,6 +66,11 @@ export default function App() {
         <SevereZoneOverlay 
           isOpen={showSevereOverlay} 
           onClose={() => setShowSevereOverlay(false)} 
+        />
+
+        <AnalysisPanel 
+          isOpen={analysisMode} 
+          onClose={() => setAnalysisMode(false)} 
         />
 
       </div>
