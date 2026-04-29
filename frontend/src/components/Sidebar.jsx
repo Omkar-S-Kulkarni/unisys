@@ -6,6 +6,7 @@ export default function Sidebar() {
   const navItems = [
     { label: "Orchestration", path: "/", icon: "grid_view" },
     { label: "Route Plan", path: "/route-plan", icon: "map" },
+    { label: "Simulation", path: "/simulation", icon: "compass" },
     { label: "Zonal Analysis", path: "/zonal", icon: "analytics" },
     { label: "Shelter Status", path: "/shelter", icon: "shield" },
     { label: "Replan Log", path: "/replan", icon: "history" },
@@ -36,13 +37,14 @@ export default function Sidebar() {
               key={item.path}
               to={item.path}
               className={`flex items-center gap-4 px-4 py-3 transition-all group ${isActive
-                  ? "bg-primary text-black shadow-[0_0_20px_rgba(170,255,220,0.2)]"
-                  : "text-gray-500 hover:text-gray-200 hover:bg-white/5"
+                ? "bg-primary text-black shadow-[0_0_20px_rgba(170,255,220,0.2)]"
+                : "text-gray-500 hover:text-gray-200 hover:bg-white/5"
                 }`}
             >
               <span className={`material-symbols-outlined text-[18px] ${isActive ? "text-black" : "text-gray-400 group-hover:text-primary"}`}>
                 {item.icon === "grid_view" && "⊞"}
                 {item.icon === "map" && "🗺️"}
+                {item.icon === "compass" && "🧭"}
                 {item.icon === "analytics" && "▥"}
                 {item.icon === "shield" && "🛡"}
                 {item.icon === "history" && "🕒"}

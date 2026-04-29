@@ -454,8 +454,6 @@ class DecisionGovernor:
         self._last_valid_plan = plan
         return plan
 
-        return plan
-
     # ── Simulation Loop Integration ────────────────────────────────────────────
 
     def on_tick(self, tick_state: dict) -> dict:

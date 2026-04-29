@@ -569,7 +569,6 @@ async def simulation_loop():
                     }
                     for s in city_model["shelters"]
                 ],
-                "simulation_state": simulation_state,
                 "llm_analysis": {
                     zone_name: {
                         "risk_level": data.get("risk_level", ""),
@@ -597,32 +596,34 @@ async def simulation_loop():
 
 @app.get("/api/simulation-summary")
 async def get_simulation_summary():
-    # Aggregate metrics from simulation_state
-    total_ticks = simulation_state.get("tick", 0)
-    zones_evacuated = len(simulation_state.get("evacuated_zones", []))
-    replan_count = len(simulation_state.get("replan_events", []))
+    """
+    Combined simulation summary endpoint.
+    Returns both raw metrics and the LLM-enhanced narrative summary.
+    """
+    log = decision_governor.get_simulation_log()
     
-    # Avg risk: compute from current risk_scores if available
-    # Since risk_scores is per tick, perhaps store average
-    avg_risk = simulation_state.get("avg_risk", 0)
+    # Generate the detailed LLM/statistical summary
+    summary_data = await sg.generate_llm_summary(log)
     
-    summary = f"Simulation completed {total_ticks} ticks, successfully evacuating {zones_evacuated} zones. {replan_count} replanning events occurred."
+    # Inject real events from simulation state if not present
+    formatted_events = []
+    for ev in simulation_state.get("replan_events", []):
+        formatted_events.append({
+            "tick": ev.get("tick", 0),
+            "message": f"REPLAN: {ev.get('trigger_type', 'Manual')} for {ev.get('affected_zone_id', 'ALL')}"
+        })
     
-    events = simulation_state.get("replan_events", [])[-10:]
+    summary_data["events"] = formatted_events
     
-    recommendation = "Monitor high-risk zones and ensure shelter capacities are adequate for remaining population."
-    
-    return {
-        "metrics": {
-            "total_ticks": total_ticks,
-            "zones_evacuated": zones_evacuated,
-            "replan_count": replan_count,
-            "avg_risk": round(avg_risk, 2)
-        },
-        "summary": summary,
-        "events": events,
-        "recommendation": recommendation
+    # Ensure metrics are up to date
+    summary_data["metrics"] = {
+        "total_ticks": simulation_state.get("tick", 0),
+        "zones_evacuated": sum(1 for z in city_model["zones"] if z.get("status") == "evacuated"),
+        "replan_count": len(simulation_state.get("replan_events", [])),
+        "avg_risk": round(simulation_state.get("avg_risk", 0), 2)
     }
+    
+    return summary_data
 
 @app.on_event("startup")
 async def startup_event():
@@ -645,22 +646,6 @@ async def get_evacuation_plan():
     if plan is None:
         return {"status": "no_plan_yet", "message": "Simulation has not produced a plan yet."}
     return plan
-
-@app.get("/api/simulation-summary")
-async def get_simulation_summary():
-    log = decision_governor.get_simulation_log()
-    summary = await sg.generate_llm_summary(log)
-    
-    # Inject real events from simulation state
-    formatted_events = []
-    for ev in simulation_state["replan_events"]:
-        formatted_events.append({
-            "tick": ev.get("tick", 0),
-            "message": f"REPLAN: {ev.get('trigger_type', 'Manual')} for {ev.get('affected_zone_id', 'ALL')}"
-        })
-    
-    summary["events"] = formatted_events
-    return summary
 
 @app.get("/api/ollama-status")
 async def get_ollama_status():
