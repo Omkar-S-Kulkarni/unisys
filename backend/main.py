@@ -20,7 +20,12 @@ from schema_validator import (
     get_contract_subschema,
     validate_payload,
 )
-from twilio.rest import Client
+
+# Try to import Twilio, but make it optional
+try:
+    from twilio.rest import Client
+except ImportError:
+    Client = None
 
 app = FastAPI()
 
@@ -91,9 +96,13 @@ risk_agent = RiskForecastAgent(os.path.join(_ROOT, "agents", "data"), ollama_cli
 
 # ── Initialize Twilio Client ──────────────────────────────────────────────────
 twilio_config = config.get("twilio", {})
-twilio_enabled = twilio_config.get("enabled", False)
-if twilio_enabled:
-    twilio_client = Client(twilio_config["account_sid"], twilio_config["auth_token"])
+twilio_enabled = twilio_config.get("enabled", False) and Client is not None
+if twilio_enabled and Client:
+    try:
+        twilio_client = Client(twilio_config["account_sid"], twilio_config["auth_token"])
+    except Exception as e:
+        logger.warning(f"Failed to initialize Twilio: {e}")
+        twilio_client = None
 else:
     twilio_client = None
 
@@ -319,6 +328,10 @@ async def simulation_loop():
                             "route_quality": new_route.route_quality,
                             "status": new_route.status
                         }
+                
+                # Set forbidden routes
+                if overrides.get("forbiddenRoutes"):
+                    mobility_agent.set_forbidden_routes(overrides["forbiddenRoutes"])
                 
                 tick_data["routes"] = routes
 
@@ -777,6 +790,16 @@ async def websocket_endpoint(websocket: WebSocket):
                     payload.get("to"),
                     payload.get("reason", "Manual Override via Dashboard")
                 )
+            elif message["type"] == "MARK_ROUTE_IMPOSSIBLE":
+                payload = message.get("payload", {})
+                from_zone = payload.get("from_zone")
+                to_shelter = payload.get("to_shelter")
+                if from_zone and to_shelter:
+                    # Add to forbidden routes
+                    mobility_agent.add_forbidden_route(from_zone, to_shelter)
+                    # Trigger replan
+                    simulation_state["manual_replan_requested"] = True
+                    logger.info(f"Marked route {from_zone} -> {to_shelter} as impossible and triggered replan")
             elif message["type"] == "SEND_EMERGENCY_NOTIFICATIONS":
                 # Get the latest evacuation plan
                 last_plan = decision_governor.get_last_plan()

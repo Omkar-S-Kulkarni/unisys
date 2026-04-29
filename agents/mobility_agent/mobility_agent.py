@@ -104,6 +104,7 @@ class MobilityAgent:
         self._logs: list[MobilityLog] = []
         self._current_tick: int = 0
         self._vehicle_counts: dict[str, int] = {}    # zone -> vehicles currently routing
+        self._forbidden_routes: set[tuple[str, str]] = set()  # (from_zone, to_shelter) pairs to avoid
 
         # Logger (Python stdlib)
         self._logger = logging.getLogger("MobilityAgent")
@@ -351,6 +352,10 @@ class MobilityAgent:
         candidates: list[RouteResult] = []
 
         for shelter in shelters:
+            # Skip forbidden routes
+            if (from_zone, shelter["id"]) in self._forbidden_routes:
+                continue
+            
             # Skip full shelters
             node_data = self._live_graph.nodes.get(shelter["id"], {})
             occupancy = node_data.get("occupancy", 0)
@@ -363,7 +368,7 @@ class MobilityAgent:
                 candidates.append(result)
 
         if not candidates:
-            reason = f"No reachable shelters from {from_zone} — all full or flooded out."
+            reason = f"No reachable shelters from {from_zone} — all full, forbidden, or flooded out."
             self._add_log(tick, "route_failed", {"from": from_zone, "to": "any_shelter", "reason": reason})
             return RouteResult(
                 tick=tick, from_zone=from_zone, to_zone="NONE",
@@ -528,6 +533,27 @@ class MobilityAgent:
                 "reason": reason,
             })
             self._log_info(f"Manual block: {from_zone} — {to_zone} ({reason})")
+
+    def set_forbidden_routes(self, forbidden_routes: list[tuple[str, str]]) -> None:
+        """
+        Set routes that should be avoided for human intervention.
+        forbidden_routes: list of (from_zone, to_shelter) tuples
+        """
+        self._forbidden_routes = set(forbidden_routes)
+        self._log_info(f"Set {len(forbidden_routes)} forbidden routes")
+
+    def add_forbidden_route(self, from_zone: str, to_shelter: str) -> None:
+        """
+        Add a single forbidden route.
+        """
+        self._forbidden_routes.add((from_zone, to_shelter))
+        self._log_info(f"Added forbidden route: {from_zone} -> {to_shelter}")
+
+    def get_forbidden_routes(self) -> list[tuple[str, str]]:
+        """
+        Get the current list of forbidden routes.
+        """
+        return list(self._forbidden_routes)
 
     def get_graph_state(self) -> dict:
         """

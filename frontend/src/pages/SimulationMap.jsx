@@ -174,8 +174,8 @@ export default function SimulationMap() {
     }, [notification]);
 
     return (
-        <div className="flex flex-col h-full space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-800 pb-2">
+        <div className="flex flex-col h-screen w-full space-y-4 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-gray-800 pb-2 px-4 pt-4">
                 <div className="flex flex-col gap-1">
                     <span className="text-xs font-bold text-primary uppercase tracking-[0.2em]">Evacuation Simulation</span>
                     <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest">Live tick: {data?.tick ?? 0}</span>
@@ -203,13 +203,14 @@ export default function SimulationMap() {
                 </div>
             )}
 
-            <div className="grid gap-4 xl:grid-cols-[0.7fr_0.3fr] h-full">
-                <div className="rounded-3xl border border-white/10 overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.45)] relative">
+            <div className="grid gap-4 xl:grid-cols-[0.7fr_0.3fr] flex-1 overflow-hidden px-4 pb-4">
+                <div className="rounded-3xl border border-white/10 overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.45)] relative h-full">
                     <MapContainer
                         center={[12.9716, 77.6411]}
                         zoom={12}
                         scrollWheelZoom={true}
-                        style={{ height: '100%', minHeight: '620px', width: '100%' }}>
+                        style={{ height: '100%', width: '100%' }}
+                        className="w-full h-full">
                         <TileLayer
                             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -307,7 +308,7 @@ export default function SimulationMap() {
                     </MapContainer>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-4 overflow-y-auto">
                     <div className="rounded-3xl border border-white/10 bg-[#09090d]/80 p-5 shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
                         <div className="flex items-center justify-between mb-4">
                             <div>
@@ -346,28 +347,28 @@ export default function SimulationMap() {
                             )}
                         </div>
                     </div>
-                </div>
 
-                <div className="rounded-3xl border border-white/10 bg-[#09090d]/80 p-5 shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
-                    <div className="text-xs font-bold text-primary uppercase tracking-[0.2em] mb-4">Shelter Load Summary</div>
-                    <div className="space-y-3">
-                        {shelterList.map((shelter) => {
-                            const percentage = Math.min(Math.round(shelter.load_pct), 100);
-                            return (
-                                <div key={`summary-${shelter.id}`} className="rounded-3xl border border-gray-800 p-4 bg-[#101017]/80">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <div className="text-sm font-bold text-white">{shelter.name}</div>
-                                            <div className="text-[10px] uppercase tracking-[0.2em] text-gray-500">{shelter.available_capacity <= 0 ? 'FULL' : `${shelter.available_capacity} seats left`}</div>
+                    <div className="rounded-3xl border border-white/10 bg-[#09090d]/80 p-5 shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
+                        <div className="text-xs font-bold text-primary uppercase tracking-[0.2em] mb-4">Shelter Load Summary</div>
+                        <div className="space-y-3">
+                            {shelterList.map((shelter) => {
+                                const percentage = Math.min(Math.round(shelter.load_pct), 100);
+                                return (
+                                    <div key={`summary-${shelter.id}`} className="rounded-3xl border border-gray-800 p-4 bg-[#101017]/80">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <div className="text-sm font-bold text-white">{shelter.name}</div>
+                                                <div className="text-[10px] uppercase tracking-[0.2em] text-gray-500">{shelter.available_capacity <= 0 ? 'FULL' : `${shelter.available_capacity} seats left`}</div>
+                                            </div>
+                                            <div className={`text-xs font-black ${percentage >= 100 ? 'text-red-500' : 'text-emerald-400'}`}>{percentage}%</div>
                                         </div>
-                                        <div className={`text-xs font-black ${percentage >= 100 ? 'text-red-500' : 'text-emerald-400'}`}>{percentage}%</div>
+                                        <div className="mt-3 h-2 w-full rounded-full bg-slate-900 overflow-hidden">
+                                            <div className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500" style={{ width: `${percentage}%` }}></div>
+                                        </div>
                                     </div>
-                                    <div className="mt-3 h-2 w-full rounded-full bg-slate-900 overflow-hidden">
-                                        <div className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500" style={{ width: `${percentage}%` }}></div>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
             </div>
