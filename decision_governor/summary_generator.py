@@ -172,7 +172,7 @@ async def generate_llm_summary(simulation_log: list[dict]) -> dict:
     
     # Calculate average risk as a proxy from final distribution
     dist = base_summary.get("final_risk_distribution", {})
-    total_zones = base_summary.get("total_zones", 1)
+    total_zones = base_summary.get("total_zones", 1) or 1
     avg_risk_est = (dist.get("low", 0) * 2 + dist.get("medium", 0) * 5 + dist.get("high", 0) * 9) / total_zones
 
     res = {
@@ -190,7 +190,7 @@ async def generate_llm_summary(simulation_log: list[dict]) -> dict:
 
     if _ollama_client is None or not await _ollama_client.is_available():
         res["summary"] = _generate_fallback_narrative(base_summary)
-        res["recommendation"] = "Standard protocols maintained. LLM analysis unavailable."
+        res["recommendation"] = _generate_fallback_recommendation(base_summary)
         return res
 
     # Build a compact log summary for the LLM
@@ -220,7 +220,7 @@ async def generate_llm_summary(simulation_log: list[dict]) -> dict:
 
         if llm_res and isinstance(llm_res, dict):
             res["summary"] = llm_res.get("summary", _generate_fallback_narrative(base_summary))
-            res["recommendation"] = llm_res.get("recommendation", "Continue current emergency protocols.")
+            res["recommendation"] = llm_res.get("recommendation", _generate_fallback_recommendation(base_summary))
             res["llm_powered"] = True
             return res
     except Exception as e:
@@ -228,8 +228,27 @@ async def generate_llm_summary(simulation_log: list[dict]) -> dict:
 
     # Fallback
     res["summary"] = _generate_fallback_narrative(base_summary)
-    res["recommendation"] = "Standard evacuation protocols recommended."
+    res["recommendation"] = _generate_fallback_recommendation(base_summary)
     return res
+
+
+def _generate_fallback_recommendation(summary: dict) -> str:
+    """Generate a rule-based tactical recommendation based on metrics."""
+    pct = summary.get("pct_population_evacuated", 0)
+    replans = summary.get("total_replans", 0)
+    dist = summary.get("final_risk_distribution", {})
+    high_risk = dist.get("high", 0)
+
+    if high_risk > 2:
+        return "CRITICAL: Deploy additional mobility assets to high-risk zones immediately. Prioritize route clearance for extraction."
+    elif replans > 5:
+        return "ALERT: High system instability detected. Review replan triggers and consider stabilizing evacuation routes."
+    elif pct < 50:
+        return "ADVISORY: Evacuation progress below nominal levels. Initiate secondary shelter protocols and verify road availability."
+    elif high_risk > 0:
+        return "Maintain vigilance in remaining high-risk zones. Finalize extraction for the last active sectors."
+    else:
+        return "Operational objectives achieved. Transition to post-evacuation assessment and infrastructure recovery."
 
 
 def _generate_fallback_narrative(summary: dict) -> str:
@@ -283,7 +302,7 @@ def _empty_summary() -> dict:
         "completion_time_ticks": 0,
         "total_replans": 0,
         "zones_evacuated": 0,
-        "total_zones": 0,
+        "total_zones": 1,
         "pct_population_evacuated": 0.0,
         "replan_reasons": [],
         "final_risk_distribution": {"low": 0, "medium": 0, "high": 0},
