@@ -357,16 +357,16 @@ async def simulation_loop():
                     entry["next_batch_size"] = 0
 
                 # Add LLM risk analysis
-                if zone_name in _latest_llm_analysis:
-                    analysis = _latest_llm_analysis[zone_name]
+                if z_name in _latest_llm_analysis:
+                    analysis = _latest_llm_analysis[z_name]
                     entry["llm_risk_reasoning"] = analysis.get("reasoning", "")
                     entry["llm_risk_level"] = analysis.get("risk_level", "")
                     entry["llm_recommendation"] = analysis.get("recommendation", "")
                     entry["analysis_source"] = analysis.get("source", "rule-based")
 
                 # Add LLM rationale (override template if available)
-                if zone_name in _latest_llm_rationales:
-                    entry["llm_rationale"] = _latest_llm_rationales[zone_name]
+                if z_name in _latest_llm_rationales:
+                    entry["llm_rationale"] = _latest_llm_rationales[z_name]
 
             # 10. Update Shelter Occupancy & Evacuated Status (Phase 12) - INCREMENTAL
             newly_evacuated = []
