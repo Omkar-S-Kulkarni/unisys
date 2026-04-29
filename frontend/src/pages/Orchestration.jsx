@@ -34,7 +34,7 @@ const ZoneCard = ({ zone, liveRisk, llmData }) => {
   const hasLlm = llmData && llmData.reasoning;
 
   return (
-    <div 
+    <div
       className={`p-4 border-l-2 ${config.border} bg-[#16161a] hover:bg-[#1c1c21] transition-all group cursor-pointer relative`}
       onClick={() => hasLlm && setShowInsight(!showInsight)}
     >
@@ -206,6 +206,14 @@ export default function Orchestration() {
   const [evacPlan, setEvacPlan] = useState(null);
   const [zoneStates, setZoneStates] = useState([]);
   const [selectedRoad, setSelectedRoad] = useState('');
+  const [emergencyInputs, setEmergencyInputs] = useState({
+    prioritizeZone: '',
+    changePathFrom: '',
+    changePathTo: '',
+    changePathVia: '',
+    useShelter: '',
+    shelterSize: ''
+  });
   const [llmAnalysis, setLlmAnalysis] = useState({});
   const [ollamaStatus, setOllamaStatus] = useState(null);
   const [replanEvents, setReplanEvents] = useState([]);
@@ -233,7 +241,7 @@ export default function Orchestration() {
       if (data.ollama_status) {
         setOllamaStatus(data.ollama_status);
       }
-      
+
       if (data.replan_events) {
         setReplanEvents(data.replan_events);
       }
@@ -270,12 +278,12 @@ export default function Orchestration() {
     if (!selectedRoad) return;
     const parts = selectedRoad.split("|");
     if (parts.length === 2) {
-       sendCommand("MANUAL_BLOCK", {
-           from: parts[0],
-           to: parts[1],
-           reason: "Human Evaluator Override via Dashboard"
-       });
-       setSelectedRoad('');
+      sendCommand("MANUAL_BLOCK", {
+        from: parts[0],
+        to: parts[1],
+        reason: "Human Evaluator Override via Dashboard"
+      });
+      setSelectedRoad('');
     }
   };
 
@@ -321,7 +329,7 @@ export default function Orchestration() {
               <div className="px-4 py-2 border-b border-gray-800 flex items-center justify-between">
                 <span className="text-[10px] font-bold text-gray-400 tracking-[0.1em] uppercase">Detailed Strategy Analysis</span>
                 {evacSequence.length > 0 && (
-                   <span className="text-[8px] font-mono text-gray-500 uppercase">Focus: {evacSequence[0].zone_name}</span>
+                  <span className="text-[8px] font-mono text-gray-500 uppercase">Focus: {evacSequence[0].zone_name}</span>
                 )}
               </div>
               <RationalePanel topOrder={evacSequence[0]} />
@@ -335,34 +343,34 @@ export default function Orchestration() {
               <ReplanLog events={replanEvents} />
             </div>
           </div>
-          
-          <div className="grid grid-cols-2 gap-6 h-48 min-h-[12rem]">
-             <div className="flex flex-col border border-gray-800/50 bg-[#111114]">
-                <div className="px-4 py-2 border-b border-gray-800 flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-gray-400 tracking-[0.1em] uppercase">Evacuation Sequence</span>
-                  <span className="text-[10px] text-emerald-500 font-mono">{evacSequence.length} ZONES</span>
-                </div>
-                <EvacuationSequence sequence={evacSequence} isAiActive={isAiActive} />
-             </div>
 
-             <div className="flex flex-col border border-gray-800/50 bg-[#111114]">
-                <div className="px-4 py-2 border-b border-gray-800 flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-gray-400 tracking-[0.1em] uppercase">Global System Log</span>
-                  <span className="text-[10px] text-gray-500 font-mono">{globalLogs.length}</span>
-                </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-1 font-mono">
-                  {globalLogs.length > 0 ? (
-                    globalLogs.slice(0, 8).map((log, i) => (
-                      <div key={i} className="flex gap-3 text-[9px] leading-relaxed">
-                        <span className="text-emerald-500/60 shrink-0">{log.time}</span>
-                        <span className={log.color + " truncate"}>{log.msg}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-[9px] text-gray-600 italic">Waiting...</div>
-                  )}
-                </div>
-             </div>
+          <div className="grid grid-cols-2 gap-6 h-48 min-h-[12rem]">
+            <div className="flex flex-col border border-gray-800/50 bg-[#111114]">
+              <div className="px-4 py-2 border-b border-gray-800 flex items-center justify-between">
+                <span className="text-[10px] font-bold text-gray-400 tracking-[0.1em] uppercase">Evacuation Sequence</span>
+                <span className="text-[10px] text-emerald-500 font-mono">{evacSequence.length} ZONES</span>
+              </div>
+              <EvacuationSequence sequence={evacSequence} isAiActive={isAiActive} />
+            </div>
+
+            <div className="flex flex-col border border-gray-800/50 bg-[#111114]">
+              <div className="px-4 py-2 border-b border-gray-800 flex items-center justify-between">
+                <span className="text-[10px] font-bold text-gray-400 tracking-[0.1em] uppercase">Global System Log</span>
+                <span className="text-[10px] text-gray-500 font-mono">{globalLogs.length}</span>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-1 font-mono">
+                {globalLogs.length > 0 ? (
+                  globalLogs.slice(0, 8).map((log, i) => (
+                    <div key={i} className="flex gap-3 text-[9px] leading-relaxed">
+                      <span className="text-emerald-500/60 shrink-0">{log.time}</span>
+                      <span className={log.color + " truncate"}>{log.msg}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-[9px] text-gray-600 italic">Waiting...</div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -406,29 +414,92 @@ export default function Orchestration() {
             </div>
             <div className="p-4 flex flex-col gap-3">
               <p className="text-[10px] text-gray-500 tracking-wide mb-1">Select a route to mark as impassable.</p>
-              <select 
+              <select
                 value={selectedRoad}
                 onChange={(e) => setSelectedRoad(e.target.value)}
                 className="w-full bg-[#16161a] border border-gray-700 text-gray-300 text-xs p-2 rounded focus:outline-none focus:border-red-500">
                 <option value="">-- Select Road Segment --</option>
                 {cityData.road_network.edges.map((edge, i) => {
-                    // Extract names from Zone IDs by looking up
-                    const z1 = cityData.zones.find(z => z.id === edge[0])?.name || edge[0];
-                    const z2 = cityData.zones.find(z => z.id === edge[1])?.name || edge[1];
-                    return (
-                        <option key={i} value={`${z1}|${z2}`}>{edge[3]}</option>
-                    )
+                  // Extract names from Zone IDs by looking up
+                  const z1 = cityData.zones.find(z => z.id === edge[0])?.name || edge[0];
+                  const z2 = cityData.zones.find(z => z.id === edge[1])?.name || edge[1];
+                  return (
+                    <option key={i} value={`${z1}|${z2}`}>{edge[3]}</option>
+                  )
                 })}
               </select>
-              <button 
+              <button
                 onClick={handleManualOverride}
                 disabled={!selectedRoad}
                 className="w-full bg-red-600/10 text-red-500 border border-red-600/30 hover:bg-red-600 hover:text-white transition-all text-[10px] font-bold tracking-widest py-2 rounded uppercase disabled:opacity-50 disabled:cursor-not-allowed mb-2">
                 Flood Route Segment
               </button>
-              
-              <button 
-                onClick={() => sendCommand("EMERGENCY_REPLAN", {})}
+
+              <div className="border-t border-gray-800 pt-3">
+                <p className="text-[10px] text-gray-500 tracking-wide mb-2">Emergency Replan Options:</p>
+                <div className="space-y-2">
+                  <select
+                    value={emergencyInputs.prioritizeZone}
+                    onChange={(e) => setEmergencyInputs({ ...emergencyInputs, prioritizeZone: e.target.value })}
+                    className="w-full bg-[#16161a] border border-gray-700 text-gray-300 text-xs p-2 rounded focus:outline-none focus:border-orange-500">
+                    <option value="">-- Prioritize Zone --</option>
+                    {zones.map(zone => (
+                      <option key={zone.id} value={zone.name}>{zone.name}</option>
+                    ))}
+                  </select>
+
+                  <div className="grid grid-cols-3 gap-1">
+                    <select
+                      value={emergencyInputs.changePathFrom}
+                      onChange={(e) => setEmergencyInputs({ ...emergencyInputs, changePathFrom: e.target.value })}
+                      className="bg-[#16161a] border border-gray-700 text-gray-300 text-xs p-1 rounded focus:outline-none focus:border-orange-500">
+                      <option value="">From</option>
+                      {zones.map(zone => (
+                        <option key={zone.id} value={zone.name}>{zone.name}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={emergencyInputs.changePathTo}
+                      onChange={(e) => setEmergencyInputs({ ...emergencyInputs, changePathTo: e.target.value })}
+                      className="bg-[#16161a] border border-gray-700 text-gray-300 text-xs p-1 rounded focus:outline-none focus:border-orange-500">
+                      <option value="">To Shelter</option>
+                      {sheltersFromModel.map(shelter => (
+                        <option key={shelter.id} value={shelter.id}>{shelter.name}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={emergencyInputs.changePathVia}
+                      onChange={(e) => setEmergencyInputs({ ...emergencyInputs, changePathVia: e.target.value })}
+                      className="bg-[#16161a] border border-gray-700 text-gray-300 text-xs p-1 rounded focus:outline-none focus:border-orange-500">
+                      <option value="">Via</option>
+                      {zones.map(zone => (
+                        <option key={zone.id} value={zone.name}>{zone.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <select
+                    value={emergencyInputs.useShelter}
+                    onChange={(e) => setEmergencyInputs({ ...emergencyInputs, useShelter: e.target.value })}
+                    className="w-full bg-[#16161a] border border-gray-700 text-gray-300 text-xs p-2 rounded focus:outline-none focus:border-orange-500">
+                    <option value="">-- Use Shelter Instead --</option>
+                    {sheltersFromModel.map(shelter => (
+                      <option key={shelter.id} value={shelter.id}>{shelter.name}</option>
+                    ))}
+                  </select>
+
+                  <input
+                    type="number"
+                    placeholder="Change Shelter Size"
+                    value={emergencyInputs.shelterSize}
+                    onChange={(e) => setEmergencyInputs({ ...emergencyInputs, shelterSize: e.target.value })}
+                    className="w-full bg-[#16161a] border border-gray-700 text-gray-300 text-xs p-2 rounded focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={() => sendCommand("EMERGENCY_REPLAN", emergencyInputs)}
                 className="w-full bg-orange-600/20 text-orange-500 border border-orange-600/50 hover:bg-orange-600 hover:text-white transition-all text-[10px] font-bold tracking-widest py-2 rounded uppercase">
                 Emergency Replan (Global)
               </button>

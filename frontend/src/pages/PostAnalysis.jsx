@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useGlobalSocket } from '../context/SocketContext';
 
 const StatCard = ({ label, value, sub, color }) => (
   <div className="bg-[#111114] border border-gray-800 p-6 flex flex-col justify-between">
@@ -9,28 +10,48 @@ const StatCard = ({ label, value, sub, color }) => (
 );
 
 export default function PostAnalysis() {
+  const { data } = useGlobalSocket();
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchSummary = async () => {
-    setLoading(true);
+  const fetchSummary = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const res = await fetch('http://localhost:8000/api/simulation-summary');
-      const data = await res.json();
-      setSummary(data);
+      const result = await res.json();
+      setSummary(result);
       setError(null);
     } catch (err) {
       setError("Failed to fetch simulation summary. Ensure the backend is running.");
       console.error(err);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchSummary();
+    const refreshId = setInterval(() => fetchSummary(false), 10000);
+    return () => clearInterval(refreshId);
   }, []);
+
+  useEffect(() => {
+    if (!data) return;
+    setSummary(prev => {
+      const current = prev || { metrics: {}, events: [], summary: '', recommendation: '' };
+      return {
+        ...current,
+        metrics: {
+          total_ticks: data.tick ?? current.metrics.total_ticks ?? 0,
+          zones_evacuated: data.evacuated_zones_count ?? current.metrics.zones_evacuated ?? 0,
+          replan_count: data.replan_events?.length ?? current.metrics.replan_count ?? 0,
+          avg_risk: data.simulation_state?.avg_risk ?? current.metrics.avg_risk ?? 0,
+        },
+        events: data.replan_events || current.events,
+      };
+    });
+  }, [data]);
 
   if (loading) return (
     <div className="h-full flex items-center justify-center">
@@ -48,7 +69,7 @@ export default function PostAnalysis() {
           <h1 className="text-3xl font-black text-gray-100 tracking-tight uppercase">Simulation Summary</h1>
           <p className="text-[10px] text-gray-500 font-mono tracking-widest mt-1">POST_EVENT_RECON // ID_{Math.floor(Math.random() * 9000) + 1000}</p>
         </div>
-        <button 
+        <button
           onClick={fetchSummary}
           className="px-6 py-2 bg-primary/10 text-primary border border-primary/30 text-[10px] font-bold tracking-widest uppercase hover:bg-primary hover:text-black transition-all"
         >
@@ -63,28 +84,28 @@ export default function PostAnalysis() {
       )}
 
       <div className="grid grid-cols-4 gap-6">
-        <StatCard 
-          label="Execution Time" 
-          value={summary?.metrics?.total_ticks || 0} 
-          sub="TOTAL SIMULATION TICKS" 
+        <StatCard
+          label="Execution Time"
+          value={summary?.metrics?.total_ticks || 0}
+          sub="TOTAL SIMULATION TICKS"
           color="text-emerald-400"
         />
-        <StatCard 
-          label="Zones Evacuated" 
-          value={summary?.metrics?.zones_evacuated || 0} 
-          sub="COMPLETED EXTRACTIONS" 
+        <StatCard
+          label="Zones Evacuated"
+          value={summary?.metrics?.zones_evacuated || 0}
+          sub="COMPLETED EXTRACTIONS"
           color="text-blue-400"
         />
-        <StatCard 
-          label="System Replans" 
-          value={summary?.metrics?.replan_count || 0} 
-          sub="AUTONOMOUS RECALCULATIONS" 
+        <StatCard
+          label="System Replans"
+          value={summary?.metrics?.replan_count || 0}
+          sub="AUTONOMOUS RECALCULATIONS"
           color="text-orange-400"
         />
-        <StatCard 
-          label="Avg Risk" 
-          value={(summary?.metrics?.avg_risk || 0).toFixed(1)} 
-          sub="MAX_SCALE: 10.0" 
+        <StatCard
+          label="Avg Risk"
+          value={(summary?.metrics?.avg_risk || 0).toFixed(1)}
+          sub="MAX_SCALE: 10.0"
           color="text-yellow-400"
         />
       </div>
@@ -125,10 +146,10 @@ export default function PostAnalysis() {
           </div>
 
           <div className="bg-primary/5 border border-primary/20 p-6">
-             <h2 className="text-[10px] font-bold text-primary uppercase tracking-widest mb-2">Final Recommendation</h2>
-             <p className="text-[11px] text-gray-400 leading-relaxed italic">
-                {summary?.recommendation || "System recommends immediate debriefing based on current metrics."}
-             </p>
+            <h2 className="text-[10px] font-bold text-primary uppercase tracking-widest mb-2">Final Recommendation</h2>
+            <p className="text-[11px] text-gray-400 leading-relaxed italic">
+              {summary?.recommendation || "System recommends immediate debriefing based on current metrics."}
+            </p>
           </div>
         </div>
       </div>

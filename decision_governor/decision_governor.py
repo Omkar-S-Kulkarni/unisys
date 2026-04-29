@@ -266,9 +266,15 @@ class DecisionGovernor:
         Returns:
             list[dict] — sorted by priority_score descending.
         """
+        # Filter zones by minimum risk threshold (only include dangerous zones)
+        min_risk = self._config.get("decision_governor", {}).get("min_risk_for_evacuation", 2.0)
+        
         scored: list[dict] = []
         for zone in zones:
             if zone.get("status") == "evacuated":
+                continue
+            # Only consider zones with risk >= minimum threshold
+            if zone.get("risk_score", 0) < min_risk:
                 continue
             enriched = deepcopy(zone)
             enriched["priority_score"] = self.compute_priority_score(
@@ -329,21 +335,24 @@ class DecisionGovernor:
                 for s in shelters_from_model:
                     if s["id"] == route_destination:
                         current_occ = shelter_usage.get(s["id"], 0)
-                        zone_pop = zone.get("population", 0)
-                        if current_occ + zone_pop <= s["capacity"] * self._max_shelter_capacity_pct:
+                        # Assign if shelter has ANY space left (even if not for whole population)
+                        if current_occ < s["capacity"]:
                             assigned_shelter = s["id"]
                             shelter_for_rationale = s
-                            shelter_usage[s["id"]] = current_occ + zone_pop
+                            # For planning purposes, we assume we want to move as many as possible
+                            # but we don't block the assignment just because the whole zone won't fit
+                            zone_pop = zone.get("population", 0)
+                            shelter_usage[s["id"]] = current_occ + zone_pop 
                             break
 
             # If no shelter from route, try any shelter with capacity
             if assigned_shelter is None:
                 for s in shelters_from_model:
                     current_occ = shelter_usage.get(s["id"], 0)
-                    zone_pop = zone.get("population", 0)
-                    if current_occ + zone_pop <= s["capacity"] * self._max_shelter_capacity_pct:
+                    if current_occ < s["capacity"]:
                         assigned_shelter = s["id"]
                         shelter_for_rationale = s
+                        zone_pop = zone.get("population", 0)
                         shelter_usage[s["id"]] = current_occ + zone_pop
                         break
 
@@ -408,25 +417,10 @@ class DecisionGovernor:
         return candidate_plans
 
 
-    def handle_replan(self, trigger: dict) -> dict:
+    def handle_replan(self, trigger: dict, zone_states: Optional[list[dict]] = None, available_routes: Optional[dict] = None) -> dict:
         """
         Handle a replanning trigger from the simulation engine.
-
-        Trigger schema (verified from backend/main.py and mobility_agent patterns):
-            {
-                "trigger_type":      "route_unavailable" | "shelter_full" | "risk_threshold",
-                "affected_zone_id":  str (zone ID, e.g. "Z07"),
-                "tick":              int
-            }
-
-        Recomputes the full evacuation sequence. Returns the updated plan.
-        Respects replan_cooldown_ticks from config.
-
-        Args:
-            trigger: Replan trigger dict.
-
-        Returns:
-            dict — updated evacuation plan, or the last valid plan if in cooldown.
+        ...
         """
         trigger_type: str = trigger.get("trigger_type", "unknown")
         affected_zone: str = trigger.get("affected_zone_id", "unknown")
@@ -443,22 +437,22 @@ class DecisionGovernor:
                  tick=trigger_tick)
             if self._last_valid_plan is not None:
                 return self._last_valid_plan
-            # If no plan exists yet, we must still compute one
-            _log("No previous plan exists — computing fresh plan despite cooldown",
-                 tick=trigger_tick)
 
         self._last_replan_tick = trigger_tick
         self._current_tick = trigger_tick
 
-        # Recompute using current city model zones
-        zones = deepcopy(self._city_model.get("zones", []))
+        # Recompute using current zone states (risk scores)
+        zones = zone_states if zone_states is not None else deepcopy(self._city_model.get("zones", []))
 
         # Re-rank and regenerate
-        ranked = self.rank_zones(zones)
-        plan = self.generate_evacuation_plan(ranked)
+        ranked = self.rank_zones(zones, available_routes)
+        plan = self.generate_evacuation_plan(ranked, available_routes)
 
         _log(f"REPLAN complete — new evacuation sequence has {len(plan['evacuation_sequence'])} zones",
              tick=trigger_tick)
+
+        self._last_valid_plan = plan
+        return plan
 
         return plan
 
@@ -507,7 +501,7 @@ class DecisionGovernor:
         replan_trigger: Optional[dict] = tick_state.get("replan_trigger")
 
         if replan_triggered and replan_trigger is not None:
-            return self.handle_replan(replan_trigger)
+            return self.handle_replan(replan_trigger, zone_states, available_routes)
 
         # Normal tick: rank zones and generate plan
         ranked = self.rank_zones(zone_states, available_routes)

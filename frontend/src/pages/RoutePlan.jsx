@@ -157,15 +157,28 @@ export default function RoutePlan() {
   useEffect(() => {
     if (data && data.tick !== undefined) {
       setTick(data.tick);
-      if (data.routes) {
-        const routesArray = Object.entries(data.routes).map(([zoneId, route]) => {
-          const zone = cityData.zones.find(z => z.id === zoneId || z.name === zoneId);
+      if (data.routes && data.evacuation_plan) {
+        const sortedZones = [...data.evacuation_plan.evacuation_sequence]
+          .filter(item => data.routes[item.zone_name])
+          .sort((a, b) => {
+            const aRisk = a.risk_score ?? 0;
+            const bRisk = b.risk_score ?? 0;
+            if (bRisk !== aRisk) return bRisk - aRisk;
+            return (b.priority_score ?? 0) - (a.priority_score ?? 0);
+          });
+
+        const top3 = sortedZones.slice(0, 3);
+        const routesArray = top3.map((item, index) => {
+          const route = data.routes[item.zone_name];
+          const liveZone = data.city_model?.zones?.find(z => z.id === item.zone_id || z.name === item.zone_name);
           return {
-            from: zoneId,
+            from: item.zone_name,
             to: route.to_zone,
             path: route.path,
-            humans: zone?.population || (Math.floor(Math.random() * 200) + 50),
-            status: route.status
+            humans: item.next_batch_size || liveZone?.population || 0,
+            status: route.status,
+            rank: index + 1,
+            risk_score: item.risk_score ?? 0,
           };
         });
         setActiveRoutes(routesArray);
@@ -339,21 +352,23 @@ export default function RoutePlan() {
                   <Polyline
                     positions={pathGeo}
                     color={route.status === 'ok' ? '#aaffdc' : '#ff716c'}
-                    weight={isTopRoute ? 4 : 3}
-                    opacity={0.9}
-                    dashArray={isTopRoute ? "10, 10" : "none"}
-                    className={isTopRoute ? "best-path-glow" : ""}
+                    weight={route.rank === 1 ? 5 : route.rank === 2 ? 4 : 3}
+                    opacity={route.rank === 1 ? 0.95 : route.rank === 2 ? 0.75 : 0.55}
+                    dashArray={route.rank === 1 ? "10, 10" : "none"}
+                    className={route.rank === 1 ? "best-path-glow" : ""}
                   >
                     <Popup className="custom-popup">
                       <div className="p-1">
-                        <div className="text-[10px] font-black text-primary uppercase">OPTIMAL PATH FOUND</div>
+                        <div className="text-[10px] font-black text-primary uppercase">PRIORITY {route.rank} PATH</div>
+                        <div className="text-[8px] text-white/60 font-mono">ZONE: {route.from}</div>
+                        <div className="text-[8px] text-white/60 font-mono">RISK: {route.risk_score?.toFixed(1)}</div>
                         <div className="text-[8px] text-white/60 font-mono">FLOW: {route.humans} HUMAN_UNITS</div>
                       </div>
                     </Popup>
                   </Polyline>
 
-                  {/* Animated Moving Dots along the best path */}
-                  {isTopRoute && (
+                  {/* Animated Moving Dots along the highest-priority path */}
+                  {route.rank === 1 && (
                     <>
                       <EvacuationUnit path={pathGeo} delay={0} />
                       <EvacuationUnit path={pathGeo} delay={1500} />
@@ -366,15 +381,21 @@ export default function RoutePlan() {
 
             {/* Render Zones (Markers) */}
             {Object.entries(GEO_COORDS).filter(([k]) => k.startsWith('Z')).map(([id, coord]) => {
-              const zone = cityData.zones.find(z => z.id === id);
-              const zoneName = zone?.name || id;
+              const liveZone = data?.city_model?.zones?.find(z => z.id === id);
+              const zoneName = liveZone?.name || id;
+              const isEvacuated = liveZone?.status === 'evacuated';
+              
               return (
-                <Marker key={id} position={coord} icon={zoneIcon}>
+                <Marker key={id} position={coord} icon={zoneIcon} opacity={isEvacuated ? 0.3 : 1}>
                   <Popup className="custom-popup">
                     <div className="p-1">
-                      <div className="text-[10px] font-black text-primary tracking-widest uppercase mb-1">{zoneName}</div>
-                      <div className="text-[8px] text-gray-400 font-mono">POP: {zone?.population?.toLocaleString()}</div>
-                      <div className="text-[8px] text-gray-400 font-mono">RISK: {zone?.flood_risk_base}</div>
+                      <div className="text-[10px] font-black text-primary tracking-widest uppercase mb-1">
+                        {zoneName} {isEvacuated && "(EVACUATED)"}
+                      </div>
+                      <div className="text-[8px] text-gray-400 font-mono">
+                        REMAINING POP: {liveZone?.remaining_population?.toLocaleString() ?? liveZone?.population?.toLocaleString() ?? "N/A"}
+                      </div>
+                      <div className="text-[8px] text-gray-400 font-mono">RISK: {liveZone?.risk_score?.toFixed(1) ?? "N/A"}</div>
                     </div>
                   </Popup>
                 </Marker>

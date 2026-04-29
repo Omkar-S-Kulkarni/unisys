@@ -8,7 +8,8 @@
     },
     "replan_cooldown_ticks": 2,
     "max_shelter_capacity_pct": 0.9,
-    "risk_threshold_for_replan": 7.5
+    "risk_threshold_for_replan": 7.5,
+    "min_risk_for_evacuation": 2.0
   },
   "ollama": {
     "host": "http://127.0.0.1:11434",

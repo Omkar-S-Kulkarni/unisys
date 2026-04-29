@@ -264,22 +264,39 @@ class OllamaClient:
 
         # Try to extract JSON from the response
         try:
-            return json.loads(response)
+            # Clean up common markdown formatting
+            cleaned = response.strip()
+            if cleaned.startswith("```"):
+                # Remove opening ```json or ```
+                cleaned = cleaned.split("\n", 1)[-1]
+                if cleaned.endswith("```"):
+                    cleaned = cleaned.rsplit("```", 1)[0]
+            cleaned = cleaned.strip()
+
+            return json.loads(cleaned)
         except json.JSONDecodeError:
-            # Try to find JSON within the response
+            # Try to find JSON within the response (search for { or [)
             try:
-                start = response.index("{")
-                end = response.rindex("}") + 1
+                start_obj = response.find("{")
+                start_arr = response.find("[")
+                
+                # Use whichever comes first and is non-negative
+                if start_obj == -1: start = start_arr
+                elif start_arr == -1: start = start_obj
+                else: start = min(start_obj, start_arr)
+                
+                if start == -1: raise ValueError("No JSON markers found")
+                
+                end_obj = response.rfind("}")
+                end_arr = response.rfind("]")
+                end = max(end_obj, end_arr) + 1
+                
+                if end <= start: raise ValueError("Invalid JSON markers")
+                
                 return json.loads(response[start:end])
             except (ValueError, json.JSONDecodeError):
-                # Try array format
-                try:
-                    start = response.index("[")
-                    end = response.rindex("]") + 1
-                    return json.loads(response[start:end])
-                except (ValueError, json.JSONDecodeError):
-                    logger.warning(f"Failed to parse LLM response as JSON: {response[:200]}")
-                    return None
+                logger.warning(f"Failed to parse LLM response as JSON: {response[:200]}")
+                return None
 
     def get_status(self) -> dict:
         """Return current client status for API endpoints."""

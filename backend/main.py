@@ -130,6 +130,9 @@ async def simulation_loop():
             # 1. Generate risk scores (from RiskForecastAgent — rule-based baseline)
             risk_scores = risk_agent.get_risk_scores(tick, scenario, city_model["zones"])
             
+            # Update avg risk
+            simulation_state["avg_risk"] = sum(risk_scores.values()) / len(risk_scores) if risk_scores else 0
+            
             # Validate Risk Output
             is_valid_risk, risk_errors = validate_payload(risk_schema, risk_scores)
             if not is_valid_risk:
@@ -142,11 +145,13 @@ async def simulation_loop():
                 risk_agent.get_llm_risk_analysis(tick, scenario, city_model["zones"], risk_scores)
             )
 
-            # 2. Update Mobility Agent
+            # 2. Update Mobility Agent with live shelter occupancy
+            shelter_occupancies = {s["id"]: s.get("current_occupancy", 0) for s in city_model.get("shelters", [])}
             tick_data = mobility_agent.update_tick(
                 tick,
                 risk_scores,
-                zones_to_evacuate=zones
+                zones_to_evacuate=zones,
+                shelter_occupancies=shelter_occupancies
             )
 
             # Validate Mobility Output
@@ -251,7 +256,42 @@ async def simulation_loop():
                 if len(simulation_state["replan_events"]) > 50:
                     simulation_state["replan_events"].pop(0)
 
-            # 6. Run Decision Governor
+            # 6. Apply emergency overrides if any
+            overrides = simulation_state.get("emergency_overrides", {})
+            if overrides:
+                # Update shelter size
+                if overrides.get("shelterSize"):
+                    for s in city_model["shelters"]:
+                        s["capacity"] = int(overrides["shelterSize"])
+                
+                # Modify zone_states for prioritize_zone
+                if overrides.get("prioritizeZone"):
+                    prioritized = overrides["prioritizeZone"]
+                    zone_states = sorted(zone_states, key=lambda z: (z["name"] != prioritized, -z.get("priority_score", 0)))
+                
+                # Modify available_routes for change_path
+                routes = tick_data.get("routes", {})
+                if overrides.get("changePathFrom") and overrides.get("changePathTo"):
+                    from_zone = overrides["changePathFrom"]
+                    to_shelter = overrides["changePathTo"]
+                    # Compute new route
+                    new_route = mobility_agent.get_route(from_zone, to_shelter)
+                    if new_route.status != "failed":
+                        routes[from_zone] = {
+                            "path": new_route.path,
+                            "to_zone": to_shelter,
+                            "total_distance_km": new_route.total_distance_km,
+                            "congestion_score": new_route.congestion_score,
+                            "route_quality": new_route.route_quality,
+                            "status": new_route.status
+                        }
+                
+                tick_data["routes"] = routes
+
+            # Clear overrides after applying
+            simulation_state["emergency_overrides"] = {}
+
+            # 7. Run Decision Governor
             tick_state = {
                 "tick": tick,
                 "zone_states": zone_states,
@@ -260,6 +300,13 @@ async def simulation_loop():
                 "replan_trigger": replan_trigger,
             }
             evac_plan = decision_governor.on_tick(tick_state)
+            
+            # Add next_batch_size to the plan for UI tracking
+            for order in evac_plan.get("evacuation_sequence", []):
+                z_n = order.get("zone_name")
+                # We'll calculate this again in the loop, but we need a placeholder for the UI
+                # or better, we set it AFTER the loop below.
+                pass
             
             # 7. Generate candidate plans (strategic alternatives)
             candidate_plans = decision_governor.generate_candidate_plans(
@@ -337,22 +384,34 @@ async def simulation_loop():
             # 10. Update Shelter Occupancy & Evacuated Status (Phase 12) - INCREMENTAL
             newly_evacuated = []
             evacuation_updates = []
-            for entry in evac_plan.get("evacuation_sequence", [])[:3]:
+            for entry in evac_plan.get("evacuation_sequence", []):
                 z_name = entry.get("zone_name")
                 s_id = entry.get("assigned_shelter")
                 has_route = entry.get("assigned_route") is not None
                 
                 if z_name and s_id and has_route and z_name not in simulation_state["evacuated_zones"]:
+                    # Find shelter in city_model
+                    s = None
+                    for sh in city_model["shelters"]:
+                        if sh["id"] == s_id:
+                            s = sh
+                            break
+                    
+                    if not s:
+                        continue
+                    
                     # Incremental Batch Logic
                     steps = simulation_state["zone_evacuation_steps"].get(z_name, 0)
                     steps += 1
                     simulation_state["zone_evacuation_steps"][z_name] = steps
                     
                     # Batch size: 100, 200, 250, 300... as requested
-                    if steps == 1: batch_size = 100
-                    elif steps == 2: batch_size = 200
-                    elif steps == 3: batch_size = 250
-                    else: batch_size = 300 + (steps - 4) * 50
+                    # Batch size: Starting at 5000 and increasing rapidly for large populations
+                    # Batch size: Incremental to show progress
+                    if steps == 1: batch_size = 5000
+                    elif steps == 2: batch_size = 10000
+                    elif steps == 3: batch_size = 15000
+                    else: batch_size = 20000 + (steps - 4) * 5000
                     
                     total_pop = zone_lookup.get(z_name, {}).get("population", 0)
                     already_evac = simulation_state["evacuated_population"].get(z_name, 0)
@@ -362,29 +421,89 @@ async def simulation_loop():
                     
                     if actual_move <= 0:
                         continue
+                    
+                    # Ensure we don't overfill the current shelter
+                    # We allow up to 5% overflow for emergencies
+                    space_available = max(0, int(s["capacity"] * 1.05) - s.get("current_occupancy", 0))
+                    
+                    if space_available < actual_move:
+                        # Current shelter cannot hold the full batch. 
+                        # Try to find a new shelter if current is already very full.
+                        if space_available < (batch_size * 0.1) or space_available == 0:
+                            # Find new shelter: nearest available
+                            available_shelters = []
+                            for sh in city_model["shelters"]:
+                                sh_space = max(0, int(sh["capacity"] * 1.05) - sh.get("current_occupancy", 0))
+                                if sh_space > 0:
+                                    route = mobility_agent.get_route(z_name, sh["id"])
+                                    if route.status != "failed":
+                                        available_shelters.append((sh, route, sh_space))
+                            
+                            if available_shelters:
+                                # Sort by distance
+                                available_shelters.sort(key=lambda x: x[1].total_distance_km)
+                                new_sh, new_route, new_space = available_shelters[0]
+                                s_id = new_sh["id"]
+                                s = new_sh
+                                space_available = new_space
+                                # Update entry for plan
+                                entry["assigned_shelter"] = s_id
+                                # Update route in tick_data
+                                tick_data["routes"][z_name] = {
+                                    "path": new_route.path,
+                                    "to_zone": s_id,
+                                    "total_distance_km": new_route.total_distance_km,
+                                    "congestion_score": new_route.congestion_score,
+                                    "route_quality": new_route.route_quality,
+                                    "status": new_route.status
+                                }
+                            else:
+                                # No more shelters with space!
+                                logger.warning(f"Tick {tick}: No shelter space available for {z_name}")
+                        
+                        # Re-cap actual_move by available space in the (possibly new) shelter
+                        actual_move = min(actual_move, space_available)
 
-                    # Find shelter in city_model
-                    for s in city_model["shelters"]:
-                        if s["id"] == s_id:
-                            # Respect capacity (with 5% buffer)
-                            if s["current_occupancy"] + actual_move <= s["capacity"] * 1.05:
-                                s["current_occupancy"] += actual_move
-                                simulation_state["evacuated_population"][z_name] = already_evac + actual_move
-                                
-                                # Update zone status in city_model
-                                for z in city_model["zones"]:
-                                    if z["name"] == z_name:
-                                        z["remaining_population"] = total_pop - (already_evac + actual_move)
-                                        if z["remaining_population"] <= 0:
-                                            z["status"] = "evacuated"
-                                            simulation_state["evacuated_zones"].append(z_name)
-                                            newly_evacuated.append(z_name)
-                                        else:
-                                            z["status"] = "partially_evacuated"
-                                            evacuation_updates.append(f"{z_name}: +{actual_move}")
-                                        break
-                                logger.info(f"Tick {tick}: {z_name} moved {actual_move} to {s_id} (Total: {already_evac + actual_move}/{total_pop})")
+                    if actual_move <= 0:
+                        continue
+                    
+                    # Now move to the (possibly updated) shelter
+                    s["current_occupancy"] += actual_move
+                    simulation_state["evacuated_population"][z_name] = already_evac + actual_move
+                    
+                    # Log the shelter occupancy update
+                    logger.info(f"Tick {tick}: Shelter {s_id} ({s['name']}) occupancy: {s['current_occupancy']} (from {z_name} evacuation)", extra={"tick": tick})
+                    
+                    # Update zone status in city_model
+                    for z in city_model["zones"]:
+                        if z["name"] == z_name:
+                            z["remaining_population"] = total_pop - (already_evac + actual_move)
+                            if z["remaining_population"] <= 0:
+                                z["status"] = "evacuated"
+                                if z_name not in simulation_state["evacuated_zones"]:
+                                    simulation_state["evacuated_zones"].append(z_name)
+                                    newly_evacuated.append(z_name)
+                            else:
+                                z["status"] = "partially_evacuated"
+                                evacuation_updates.append(f"{z_name}: +{actual_move}")
+                            
+                            # Sync batch size back to the plan for UI
+                            for order in evac_plan["evacuation_sequence"]:
+                                if order.get("zone_name") == z_name:
+                                    order["next_batch_size"] = actual_move
                             break
+                    logger.info(f"Tick {tick}: {z_name} moved {actual_move} to {s_id} (Total: {already_evac + actual_move}/{total_pop})")
+
+            # Calculate average risk for Post Analysis
+            total_risk = sum(z.get("risk_score", 0) for z in city_model["zones"])
+            avg_risk = total_risk / len(city_model["zones"]) if city_model["zones"] else 0
+            simulation_state["avg_risk"] = avg_risk
+
+            # Check if all zones are evacuated
+            all_evacuated = all(z.get("status") == "evacuated" for z in city_model["zones"])
+            if all_evacuated and not simulation_state["evacuation_complete"]:
+                simulation_state["evacuation_complete"] = True
+                logger.info(f"Tick {tick}: ALL ZONES FULLY EVACUATED. Simulation objective achieved.")
 
             # 11. Aggregate System Logs (Phase 10)
             system_logs = []
@@ -438,6 +557,19 @@ async def simulation_loop():
                 ],
                 "replan_events": simulation_state["replan_events"],
                 "simulation_state": simulation_state,
+                "evacuated_zones_count": sum(1 for z in city_model["zones"] if z.get("status") == "evacuated"),
+                "shelter_status": [
+                    {
+                        "id": s["id"],
+                        "name": s["name"],
+                        "current_occupancy": s.get("current_occupancy", 0),
+                        "capacity": s.get("capacity", 0),
+                        "available_capacity": max(s.get("capacity", 0) - s.get("current_occupancy", 0), 0),
+                        "load_pct": round((s.get("current_occupancy", 0) / s.get("capacity", 1)) * 100, 1) if s.get("capacity", 0) > 0 else 0,
+                    }
+                    for s in city_model["shelters"]
+                ],
+                "simulation_state": simulation_state,
                 "llm_analysis": {
                     zone_name: {
                         "risk_level": data.get("risk_level", ""),
@@ -462,6 +594,35 @@ async def simulation_loop():
                 clients.difference_update(disconnected)
 
         await asyncio.sleep(2) 
+
+@app.get("/api/simulation-summary")
+async def get_simulation_summary():
+    # Aggregate metrics from simulation_state
+    total_ticks = simulation_state.get("tick", 0)
+    zones_evacuated = len(simulation_state.get("evacuated_zones", []))
+    replan_count = len(simulation_state.get("replan_events", []))
+    
+    # Avg risk: compute from current risk_scores if available
+    # Since risk_scores is per tick, perhaps store average
+    avg_risk = simulation_state.get("avg_risk", 0)
+    
+    summary = f"Simulation completed {total_ticks} ticks, successfully evacuating {zones_evacuated} zones. {replan_count} replanning events occurred."
+    
+    events = simulation_state.get("replan_events", [])[-10:]
+    
+    recommendation = "Monitor high-risk zones and ensure shelter capacities are adequate for remaining population."
+    
+    return {
+        "metrics": {
+            "total_ticks": total_ticks,
+            "zones_evacuated": zones_evacuated,
+            "replan_count": replan_count,
+            "avg_risk": round(avg_risk, 2)
+        },
+        "summary": summary,
+        "events": events,
+        "recommendation": recommendation
+    }
 
 @app.on_event("startup")
 async def startup_event():
@@ -583,6 +744,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 simulation_state["manual_step"] = True
             elif message["type"] == "EMERGENCY_REPLAN":
                 simulation_state["manual_replan_requested"] = True
+                simulation_state["emergency_overrides"] = message.get("payload", {})
                 logger.info("Manual EMERGENCY REPLAN requested via dashboard")
             elif message["type"] == "CHANGE_SCENARIO":
                 simulation_state["scenario"] = message.get("payload", "moderate_flood")
