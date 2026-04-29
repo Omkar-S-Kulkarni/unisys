@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useGlobalSocket } from "../context/SocketContext";
 
-export default function Navbar() {
+export default function Navbar({ theme, setTheme }) {
   const { sendCommand, simulationState } = useGlobalSocket();
   const { scenario, isRunning } = simulationState || {};
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const handleScenarioChange = (newScenario) => {
     sendCommand("CHANGE_SCENARIO", newScenario);
@@ -12,11 +14,16 @@ export default function Navbar() {
     sendCommand(controlType, null);
   };
 
+  const handleThemeToggle = () => {
+    setTheme(theme === "dark" ? "light" : "dark");
+    setSettingsOpen(false);
+  };
+
   const activeClass = "bg-primary text-black px-3 py-1 text-[10px] font-black tracking-wider shadow-[0_0_15px_rgba(170,255,220,0.3)] transition-all cursor-pointer";
   const inactiveClass = "border border-gray-800 px-3 py-1 text-[10px] font-bold text-gray-500 hover:text-white hover:border-gray-600 cursor-pointer transition-all";
 
   return (
-    <header className="flex justify-between items-center w-full px-6 py-3 border-b border-primary/10 bg-[#0e0e10] backdrop-blur-md sticky top-0 z-50">
+    <header className="flex justify-between items-center w-full px-6 py-3 border-b border-surface-border bg-surface/95 backdrop-blur-md sticky top-0 z-50">
 
       {/* LEFT SIDE */}
       <div className="flex items-center gap-8">
@@ -42,20 +49,15 @@ export default function Navbar() {
 
         {/* Disaster Types */}
         <div className="flex gap-1.5 items-center">
-          <span 
+          <span
             onClick={() => handleScenarioChange("moderate_flood")}
             className={scenario === "moderate_flood" ? activeClass : inactiveClass}>
             MODERATE FLOOD
           </span>
-          <span 
+          <span
             onClick={() => handleScenarioChange("severe_flood")}
             className={scenario === "severe_flood" ? activeClass : inactiveClass}>
             SEVERE FLOOD
-          </span>
-          <span 
-            onClick={() => handleScenarioChange("heatwave")}
-            className={scenario === "heatwave" ? activeClass : inactiveClass}>
-            HEATWAVE
           </span>
         </div>
       </div>
@@ -64,17 +66,17 @@ export default function Navbar() {
       <div className="flex items-center gap-6">
         {/* Controls */}
         <div className="flex items-center gap-3 border-r border-gray-800 pr-6">
-          <button 
+          <button
             onClick={() => handleControl("PLAY_SIMULATION")}
             className={`transition-colors scale-90 ${isRunning ? "text-primary" : "text-gray-400 hover:text-[#aaffdc]"}`}>
             ▶
           </button>
-          <button 
+          <button
             onClick={() => handleControl("PAUSE_SIMULATION")}
             className={`transition-colors scale-90 ${!isRunning ? "text-primary" : "text-gray-400 hover:text-[#aaffdc]"}`}>
             ❚❚
           </button>
-          <button 
+          <button
             onClick={() => handleControl("STEP_SIMULATION")}
             className="text-gray-400 hover:text-[#aaffdc] transition-colors scale-90 font-bold px-1"
             title="Step Forward">
@@ -87,9 +89,46 @@ export default function Navbar() {
 
         {/* Icons */}
         <div className="flex items-center gap-5">
-           <span className="text-gray-400 cursor-pointer hover:text-white transition-colors text-base">
-            ⚙
-          </span>
+          <div className="relative">
+            <button
+              onClick={() => setSettingsOpen((open) => !open)}
+              className="text-gray-400 cursor-pointer hover:text-white transition-colors text-base"
+              aria-label="Settings"
+            >
+              ⚙
+            </button>
+            {settingsOpen && (
+              <div className="absolute right-0 top-full mt-3 w-64 rounded-2xl border border-surface-border bg-surface-panel p-4 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl z-50">
+                <div className="mb-3 text-[10px] uppercase tracking-[0.32em] text-gray-400">
+                  UI SETTINGS
+                </div>
+                <div className="space-y-3">
+                  <div className="rounded-2xl border border-gray-800/60 bg-surface-muted p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-[11px] uppercase tracking-[0.24em] text-gray-400">
+                          Theme Mode
+                        </div>
+                        <div className="text-sm font-semibold text-surface-foreground">
+                          {theme === "dark" ? "Dark Mode" : "Light Mode"}
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleThemeToggle}
+                        className="rounded-full bg-primary px-3 py-1 text-[10px] font-black text-black transition-colors hover:bg-primary/90"
+                      >
+                        Switch
+                      </button>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-gray-800/60 bg-surface-muted p-3 text-[11px] text-gray-400">
+                    Use the settings menu to switch between light and dark UI styles instantly.
+                    Your preference is stored locally and restored when you return.
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
           <div className="relative">
             <span className="text-gray-400 cursor-pointer hover:text-white transition-colors text-base">
               🔔
@@ -100,9 +139,9 @@ export default function Navbar() {
 
         {/* Avatar */}
         <div className="w-9 h-9 border border-gray-800 bg-gray-900/50 flex items-center justify-center grayscale opacity-80 hover:grayscale-0 hover:opacity-100 transition-all cursor-pointer">
-           <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix&backgroundColor=454545" alt="Avatar" className="w-full h-full p-1" />
+          <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix&backgroundColor=454545" alt="Avatar" className="w-full h-full p-1" />
         </div>
       </div>
     </header>
   );
-}
+}

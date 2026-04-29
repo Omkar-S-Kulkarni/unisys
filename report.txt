@@ -1,0 +1,91 @@
+ADEO (Autonomous Disaster Evacuation Orchestrator)
+================================================
+IN-DEPTH TECHNICAL REPOSITORY REPORT
+Date: 2026-04-28
+------------------------------------------------
+
+1. CORE ORCHESTRATION LAYER
+---------------------------
+#### [FILE] backend/main.py
+- **Role**: The "Heartbeat" of the system.
+- **Key Logic**: 
+    - `simulation_loop()`: An async 2-second tick loop that coordinates all agents. It collects outputs from the Risk, Vulnerability, and Mobility agents, passes them to the Governor, and broadcasts the result.
+    - **Replan Triggers**: Condition-based logic that forces a system-wide recalibration if (a) a route is flooded, (b) a zone risk > 7.5, (c) a shelter > 90% capacity, or (d) manual human override.
+    - **WebSocket Engine**: Uses `fastapi.WebSocket` to maintain stateful connections, sending a unified `combined_payload` every tick.
+    - **Summary Endpoint**: `/api/simulation-summary` aggregates the simulation log and calls the LLM for a final debriefing.
+
+#### [FILE] config.json
+- **Role**: Centralized system parameters.
+- **Key Fields**: Defines weights for the ranking algorithm (e.g., `w_risk: 0.4`), the `risk_threshold_for_replan`, and `replan_cooldown_ticks` to prevent strategy oscillation.
+
+2. STRATEGIC INTELLIGENCE (Decision Governor)
+---------------------------------------------
+#### [FILE] decision_governor/decision_governor.py
+- **Role**: Tactical Decision Engine.
+- **Key Logic**:
+    - `rank_zones()`: Calculates a weighted priority score for every zone using live data. Filters out zones already marked as "evacuated".
+    - `generate_evacuation_plan()`: The primary strategy function. It assigns an optimal route and a safe shelter to every zone in the sequence.
+    - **Shelter Logic**: Now uses a population-aware algorithm. It tracks `current_occupancy + incoming_population` and redirects people to the next available shelter if the primary choice is full.
+    - **Strategy Selection**: Dynamically switches between Balanced, Safety-First, and Vulnerability-First modes based on current disaster severity.
+
+#### [FILE] decision_governor/rationale_generator.py
+- **Role**: AI Explainability Layer.
+- **Key Logic**: Constructs human-readable strings explaining *why* a zone was prioritized (e.g., "Whitefield prioritized due to critical risk (8.2) and high elderly density"). It combines rule-based templates with LLM refinements.
+
+#### [FILE] decision_governor/summary_generator.py
+- **Role**: Post-Event Analyst.
+- **Key Logic**: 
+    - `generate_summary()`: Statistical aggregator for zones evacuated, total ticks, and replan frequency.
+    - `generate_llm_summary()`: Passes simulation metrics to Ollama to generate a professional executive summary and tactical recommendations.
+
+3. AGENT LAYER (Multi-Agent System)
+-----------------------------------
+#### [FILE] agents/ollama_client.py
+- **Role**: Shared AI Gateway.
+- **Key Logic**: Managed communication with local LLMs (Qwen2.5-Coder/Llama3). Includes retry logic, timeout handling, and a "fallback mode" that allows the system to continue using rule-based logic if the AI server is offline.
+
+#### [FILE] agents/risk_forecast_agent/risk_agent.py
+- **Role**: Predictive Risk Modeling.
+- **Key Logic**: Tracks "Soil Saturation" per zone across ticks. If saturation hits 100%, risk escalates rapidly. Calculates "Time-to-Critical" based on current flood acceleration.
+
+#### [FILE] agents/vulnerability_agent/vulnerability_agent.py
+- **Role**: Social Impact Analysis.
+- **Key Logic**: Implements a multi-factor scoring system. It ranks zones based on Population Density, % of Elderly residents, and proximity to medical facilities (Hospitals), assigning a `priority_tier` from Low to Critical.
+
+#### [FILE] agents/mobility_agent/mobility_integration.py
+- **Role**: Dynamic Routing Engine.
+- **Key Logic**: Manages a NetworkX graph of Bangalore. It dynamically modifies the graph per tick by removing "Flooded Edges" (roads where risk > threshold), then calculates the shortest safe path between any source zone and safe shelter.
+
+4. FRONTEND ARCHITECTURE (React/Vite)
+-------------------------------------
+#### [FILE] frontend/src/pages/Orchestration.jsx
+- **Role**: Main Command Center.
+- **Key Logic**: Renders the tactical map with risk-colored zone indicators. Displays the "Evacuation Sequence" list and the "Rationale Panel" for real-time AI reasoning. Handles the global "Emergency Replan" trigger.
+
+#### [FILE] frontend/src/pages/RoutePlan.jsx
+- **Role**: Kinetic Visualization.
+- **Key Logic**: 
+    - **OSRM Integration**: Fetches real road geometry from OpenStreetMap's routing engine to draw high-fidelity paths.
+    - **Animation Engine**: Renders dark-blue "Evacuation Units" (glowing dots) that move along calculated paths to represent citizen movement.
+
+#### [FILE] frontend/src/pages/ShelterStatus.jsx
+- **Role**: Logistical Monitoring.
+- **Key Logic**: Visualizes the load factor of S01, S02, and S03. Uses population-based "Active Inbound" stats to show exactly how many people are currently being routed to each hub.
+
+#### [FILE] frontend/src/pages/PostAnalysis.jsx
+- **Role**: Retrospective Dashboard.
+- **Key Logic**: Fetches the final summary from the backend once the simulation concludes. Displays KPIs (Key Performance Indicators) and the LLM debriefing narrative.
+
+5. DATA MODELS & VALIDATION
+---------------------------
+#### [FILE] frontend/src/data/city-model.json
+- **Role**: Domain Source of Truth.
+- **Contents**: Geographic coordinates, base populations, medical facilities, and shelter capacities for all 12 zones.
+
+#### [FILE] schemas/agent_contracts.json
+- **Role**: Governance & Interoperability.
+- **Contents**: Strict JSON Schemas for every agent. Ensures that if the Risk Agent sends a `risk_score`, it is always a float between 0.0 and 10.0, preventing system-wide crashes due to malformed data.
+
+------------------------------------------------
+END OF IN-DEPTH REPORT
+------------------------------------------------

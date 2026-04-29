@@ -2,7 +2,7 @@
 
 **ADEO UIP17 | Rohan (Decision Governor)**
 
-Central evacuation decision engine for the Bengaluru flood/heatwave disaster response simulation. Prioritises zones, assigns routes and shelters, generates human-readable rationale, and produces post-simulation summaries.
+Central evacuation decision engine for the Bengaluru flood disaster response simulation. Prioritises zones, assigns routes and shelters, generates human-readable rationale, and produces post-simulation summaries.
 
 ---
 
@@ -76,7 +76,7 @@ Route data from `MobilityAgent.update_tick()` or `MobilityIntegration.on_tick()`
     "tick": int,
     "routes": {
         "Bellandur": {
-            "path": ["Bellandur", "Marathahalli", "Hebbal", "S3"],
+            "path": ["Bellandur", "Marathahalli", "Hebbal", "S03"],
             "total_distance_km": 18.3,
             "route_quality": 0.72,
             "status": "ok"    # "ok" | "degraded" | "failed"

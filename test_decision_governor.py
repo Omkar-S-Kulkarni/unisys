@@ -91,10 +91,10 @@ def run_test():
     mock_routes = {
         "Bellandur": {
             "status": "ok",
-            "path": ["Bellandur", "Marathahalli", "Hebbal", "S3"],
+            "path": ["Bellandur", "Marathahalli", "Hebbal", "S03"],
             "total_distance_km": 18.3,
             "route_quality": 0.72,
-            "to_zone": "S3",
+            "to_zone": "S03",
         },
         "Sarjapur": {
             "status": "failed",
@@ -165,7 +165,7 @@ def run_test():
     }
     test_route = {
         "status": "ok",
-        "path": ["Bellandur", "Marathahalli", "Hebbal", "S3"],
+        "path": ["Bellandur", "Marathahalli", "Hebbal", "S03"],
         "total_distance_km": 18.3,
         "route_quality": 0.72,
     }

@@ -25,7 +25,7 @@
 
     "zone.road_links":            "Derived at runtime from road_adjacency.json → edges[].from / edges[].to (zone names, not IDs)",
 
-    "shelter.id":                 "city_model.json → shelters[].id (e.g. 'S01') — road_adjacency.json uses 'S1' style IDs",
+    "shelter.id":                 "city_model.json → shelters[].id (e.g. 'S01') — road_adjacency.json also uses 'S01' style IDs",
     "shelter.name":               "city_model.json → shelters[].name",
     "shelter.zone_id":            "city_model.json → shelters[].zone_id — road_adjacency.json uses 'zone' key",
     "shelter.capacity":           "city_model.json → shelters[].capacity",

@@ -4,11 +4,12 @@ decision_governor/rationale_generator.py
 Generates human-readable rationale strings explaining each zone's
 evacuation decision.
 
+Hybrid mode:
+  - Template-based rationale (always available, instant)
+  - LLM-generated rationale (when Ollama is available, richer language)
+
 All values are dynamically interpolated from the zone dict — no
 hardcoded zone names, scores, route names, or shelter identifiers.
-
-Output is designed for non-technical stakeholders: maximum 3 sentences,
-plain English, with key metrics cited.
 
 Verified field names:
     zone["name"]                → city_model.json → zones[].name
@@ -29,7 +30,21 @@ Verified field names:
 
 from __future__ import annotations
 
+import json
+import logging
 from typing import Optional
+
+logger = logging.getLogger("RationaleGenerator")
+
+# Module-level reference to the shared Ollama client
+# Set by the backend at startup via set_ollama_client()
+_ollama_client = None
+
+
+def set_ollama_client(client) -> None:
+    """Inject the shared OllamaClient instance."""
+    global _ollama_client
+    _ollama_client = client
 
 
 def generate_rationale(
@@ -39,17 +54,13 @@ def generate_rationale(
 ) -> str:
     """
     Produce a human-readable rationale string for a single zone decision.
+    This is the synchronous template-based version (always available).
 
     Rules:
         - Never hardcode zone names, scores, or route names
         - All values dynamically interpolated from zone dict
         - Maximum 3 sentences
         - Readable by non-technical stakeholders
-
-    Example output:
-        "Zone Bellandur evacuated first: risk score 8.4/10 (severe flooding),
-         elderly population 22.3%. Route via Sarjapur Road available,
-         assigned to Shelter S2 (capacity 68% used)."
 
     Args:
         zone:     Zone dict with at minimum name, risk_score, elderly_pct,
@@ -69,9 +80,9 @@ def generate_rationale(
     risk_label = _risk_label(risk_score)
     rank_label = _ordinal(rank)
     sentence_1 = (
-        f"Zone {zone_name} ranked {rank_label} for evacuation: "
-        f"risk score {risk_score:.1f}/10 ({risk_label}), "
-        f"elderly population {elderly_pct:.1f}%."
+        f"Zone {zone_name} was ranked {rank_label} for evacuation "
+        f"due to its {risk_label} (risk score {risk_score:.1f}/10) "
+        f"and high vulnerability factors, including an elderly population of {elderly_pct:.1f}%."
     )
 
     # Sentence 2: route status
@@ -106,6 +117,156 @@ def generate_rationale(
         sentence_3 = "No shelter available — all shelters at capacity or inaccessible."
 
     return f"{sentence_1} {sentence_2} {sentence_3}"
+
+
+async def generate_llm_rationale(
+    zone: dict,
+    route: Optional[dict],
+    shelter: Optional[dict],
+) -> str:
+    """
+    Generate LLM-powered rationale for a zone's evacuation decision.
+    Falls back to template-based rationale if Ollama is unavailable.
+
+    Args:
+        zone:     Zone dict with risk_score, vulnerability_score, elderly_pct, etc.
+        route:    RouteResult dict from MobilityAgent, or None.
+        shelter:  Shelter dict from city_model, or None.
+
+    Returns:
+        str — natural language rationale (2-3 sentences).
+    """
+    # Always have fallback ready
+    template_rationale = generate_rationale(zone, route, shelter)
+
+    if _ollama_client is None or not await _ollama_client.is_available():
+        return template_rationale
+
+    zone_name = zone.get("name", "Unknown")
+    risk_score = zone.get("risk_score", 0.0)
+    vuln_score = zone.get("vulnerability_score", 0.0)
+    elderly_pct = zone.get("elderly_pct", 0.0)
+    rank = zone.get("evacuation_rank", 0)
+    priority = zone.get("priority_score", 0.0)
+    elevation = zone.get("elevation_tier", "mid")
+
+    # Build context
+    context = {
+        "zone_name": zone_name,
+        "evacuation_rank": rank,
+        "risk_score": risk_score,
+        "vulnerability_score": vuln_score,
+        "elderly_pct": elderly_pct,
+        "elevation_tier": elevation,
+        "priority_score": priority,
+    }
+
+    if route and route.get("status") != "failed":
+        context["route_status"] = "available"
+        context["route_distance_km"] = route.get("total_distance_km", 0)
+        context["route_quality"] = route.get("route_quality", 0)
+        context["route_destination"] = route.get("to_zone", "unknown")
+    elif route:
+        context["route_status"] = "failed"
+        context["route_failure_reason"] = route.get("reason", "unknown")
+    else:
+        context["route_status"] = "no data"
+
+    if shelter:
+        context["shelter_name"] = shelter.get("name", "Unknown")
+        context["shelter_capacity"] = shelter.get("capacity", 0)
+        context["shelter_occupancy"] = shelter.get("current_occupancy", 0)
+    else:
+        context["shelter"] = "none available"
+
+    system_prompt = (
+        "You are a disaster evacuation analyst writing brief decision rationales "
+        "for emergency coordinators. Be concise, specific, and actionable. "
+        "Write exactly 2-3 sentences. Use the data provided, do not invent data."
+    )
+
+    prompt = (
+        f"Write a concise rationale for this evacuation decision:\n\n"
+        f"{json.dumps(context, indent=1)}\n\n"
+        f"Explain why this zone is ranked #{rank} for evacuation "
+        f"and what the current route/shelter situation is. "
+        f"2-3 sentences only, plain English."
+    )
+
+    try:
+        result = await _ollama_client.generate(
+            prompt=prompt,
+            system=system_prompt,
+            temperature=0.4,
+            max_tokens=200,
+        )
+        if result and len(result) > 20:
+            return result.strip()
+    except Exception as e:
+        logger.warning(f"LLM rationale generation failed: {e}")
+
+    return template_rationale
+
+
+async def generate_batch_rationales(
+    ranked_zones: list[dict],
+    available_routes: Optional[dict],
+    shelters: list[dict],
+) -> dict[str, str]:
+    """
+    Generate LLM rationales for all zones in a single batch call.
+    More efficient than calling generate_llm_rationale() per zone.
+
+    Returns: dict mapping zone_name -> rationale string.
+    """
+    if _ollama_client is None or not await _ollama_client.is_available():
+        return {}
+
+    # Build compact batch data
+    batch_data = []
+    for zone in ranked_zones[:6]:  # Limit to top 6 for prompt length
+        entry = {
+            "zone": zone.get("name", "?"),
+            "rank": zone.get("evacuation_rank", 0),
+            "risk": zone.get("risk_score", 0.0),
+            "vuln": zone.get("vulnerability_score", 0.0),
+            "elderly_pct": zone.get("elderly_pct", 0.0),
+        }
+
+        zone_name = zone.get("name", "")
+        if available_routes and zone_name in available_routes:
+            route = available_routes[zone_name]
+            if isinstance(route, dict):
+                entry["route"] = route.get("status", "unknown")
+                entry["distance_km"] = route.get("total_distance_km", 0)
+        batch_data.append(entry)
+
+    system_prompt = (
+        "You are a disaster evacuation analyst. Write brief decision rationales "
+        "for emergency coordinators. Be concise and specific."
+    )
+
+    prompt = (
+        "For each zone below, write a 1-2 sentence evacuation rationale:\n\n"
+        f"{json.dumps(batch_data, indent=1)}\n\n"
+        "Respond ONLY with a JSON object mapping zone names to rationale strings:\n"
+        '{"Zone_Name": "rationale text", ...}\n'
+        "No markdown, no extra text."
+    )
+
+    try:
+        result = await _ollama_client.generate_json(
+            prompt=prompt,
+            system=system_prompt,
+            temperature=0.4,
+            max_tokens=600,
+        )
+        if result and isinstance(result, dict):
+            return {k: str(v) for k, v in result.items() if isinstance(v, str)}
+    except Exception as e:
+        logger.warning(f"Batch LLM rationale failed: {e}")
+
+    return {}
 
 
 def _risk_label(score: float) -> str:

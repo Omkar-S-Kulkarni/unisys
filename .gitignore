@@ -97,9 +97,9 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
-frontend/src/data/mobility_logs.json
-frontend/src/data/mobility_logs.json
-frontend/node_modules/
-__pycache__/
-*.pyc
-.env
+# ─────────────────────────────────────────────
+# Project-Specific
+# ─────────────────────────────────────────────
+scratch/
+.gemini/
+.antigravity/

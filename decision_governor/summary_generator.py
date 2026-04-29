@@ -3,6 +3,10 @@ decision_governor/summary_generator.py
 ========================================
 Post-event summary generator for the ADEO simulation.
 
+Hybrid mode:
+  - Statistical summary (always available, instant)
+  - LLM-enhanced narrative summary (when Ollama is available)
+
 Reads the full simulation log (list of evacuation plans across all ticks)
 from DecisionGovernor.get_simulation_log() and produces an aggregate
 summary report.
@@ -31,10 +35,20 @@ Verified zone risk_score field:
 
 from __future__ import annotations
 
+import json
 import logging
-from typing import Any
+from typing import Any, Optional
 
 logger = logging.getLogger("DecisionGovernor")
+
+# Module-level reference to the shared Ollama client
+_ollama_client = None
+
+
+def set_ollama_client(client) -> None:
+    """Inject the shared OllamaClient instance."""
+    global _ollama_client
+    _ollama_client = client
 
 
 def generate_summary(simulation_log: list[dict]) -> dict:
@@ -103,7 +117,6 @@ def generate_summary(simulation_log: list[dict]) -> dict:
             route = item.get("assigned_route")
             # The priority_score is our best proxy; actual risk_score
             # would need to be extracted from zone_states if available.
-            # We store what we can from the rationale context.
 
     # Count zones where both route and shelter were assigned at least once
     zones_evacuated: int = len(zones_with_shelter & zones_with_route)
@@ -138,6 +151,129 @@ def generate_summary(simulation_log: list[dict]) -> dict:
     )
 
     return summary
+
+
+async def generate_llm_summary(simulation_log: list[dict]) -> dict:
+    """
+    Generate an LLM-enhanced post-simulation summary.
+
+    Combines statistical data with an LLM-generated narrative analysis.
+
+    Returns:
+        dict with all standard summary fields plus:
+        - "narrative": str (LLM-generated executive summary)
+        - "key_decisions": list[str] (LLM-identified key decisions)
+        - "risk_trends": str (LLM analysis of risk progression)
+        - "recommendations": list[str] (LLM strategic recommendations)
+        - "llm_powered": bool
+    """
+    # Always compute the base statistical summary
+    base_summary = generate_summary(simulation_log)
+    
+    # Calculate average risk as a proxy from final distribution
+    dist = base_summary.get("final_risk_distribution", {})
+    total_zones = base_summary.get("total_zones", 1)
+    avg_risk_est = (dist.get("low", 0) * 2 + dist.get("medium", 0) * 5 + dist.get("high", 0) * 9) / total_zones
+
+    res = {
+        "metrics": {
+            "total_ticks": base_summary.get("total_ticks", 0),
+            "zones_evacuated": base_summary.get("zones_evacuated", 0),
+            "replan_count": base_summary.get("total_replans", 0),
+            "avg_risk": round(avg_risk_est, 1)
+        },
+        "summary": "",
+        "recommendation": "",
+        "events": [],
+        "llm_powered": False
+    }
+
+    if _ollama_client is None or not await _ollama_client.is_available():
+        res["summary"] = _generate_fallback_narrative(base_summary)
+        res["recommendation"] = "Standard protocols maintained. LLM analysis unavailable."
+        return res
+
+    # Build a compact log summary for the LLM
+    log_digest = _build_log_digest(simulation_log)
+
+    system_prompt = (
+        "You are an expert disaster management analyst. Analyze the simulation data."
+    )
+
+    prompt = (
+        f"SIMULATION STATISTICS:\n{json.dumps(base_summary, indent=1)}\n\n"
+        f"TICK-BY-TICK DIGEST:\n{json.dumps(log_digest, indent=1)}\n\n"
+        "Respond ONLY with a valid JSON object:\n"
+        "{\n"
+        '  "summary": "3-4 sentence narrative",\n'
+        '  "recommendation": "1-2 sentence recommendation"\n'
+        "}\n"
+    )
+
+    try:
+        llm_res = await _ollama_client.generate_json(
+            prompt=prompt,
+            system=system_prompt,
+            temperature=0.3,
+            max_tokens=500,
+        )
+
+        if llm_res and isinstance(llm_res, dict):
+            res["summary"] = llm_res.get("summary", _generate_fallback_narrative(base_summary))
+            res["recommendation"] = llm_res.get("recommendation", "Continue current emergency protocols.")
+            res["llm_powered"] = True
+            return res
+    except Exception as e:
+        logger.warning(f"LLM summary generation failed: {e}")
+
+    # Fallback
+    res["summary"] = _generate_fallback_narrative(base_summary)
+    res["recommendation"] = "Standard evacuation protocols recommended."
+    return res
+
+
+def _generate_fallback_narrative(summary: dict) -> str:
+    """Generate a rule-based narrative when LLM is unavailable."""
+    total = summary.get("total_ticks", 0)
+    evacuated = summary.get("zones_evacuated", 0)
+    total_zones = summary.get("total_zones", 0)
+    pct = summary.get("pct_population_evacuated", 0)
+    replans = summary.get("total_replans", 0)
+    dist = summary.get("final_risk_distribution", {})
+
+    narrative = (
+        f"The simulation ran for {total} ticks, successfully evacuating "
+        f"{evacuated} out of {total_zones} zones ({pct}% coverage). "
+    )
+    if replans > 0:
+        narrative += f"{replans} replanning events were triggered during execution. "
+    high_risk = dist.get("high", 0)
+    if high_risk > 0:
+        narrative += f"At completion, {high_risk} zone(s) remained at high risk levels."
+    else:
+        narrative += "All zones were brought to manageable risk levels."
+
+    return narrative
+
+
+def _build_log_digest(simulation_log: list[dict]) -> list[dict]:
+    """
+    Build a compact digest of the simulation log for the LLM.
+    Extracts key metrics per tick without sending the full plan data.
+    """
+    digest = []
+    for entry in simulation_log[-10:]:  # Last 10 ticks max
+        sequence = entry.get("evacuation_sequence", [])
+        tick_info = {
+            "tick": entry.get("tick", 0),
+            "zones_in_plan": len(sequence),
+            "top_zone": sequence[0].get("zone_name", "?") if sequence else "?",
+            "top_priority": round(sequence[0].get("priority_score", 0), 2) if sequence else 0,
+            "zones_with_routes": sum(1 for s in sequence if s.get("assigned_route")),
+            "zones_without_routes": sum(1 for s in sequence if not s.get("assigned_route")),
+        }
+        digest.append(tick_info)
+    return digest
 
 
 def _empty_summary() -> dict:
@@ -179,10 +315,6 @@ def _count_replans(simulation_log: list[dict]) -> int:
 def _compute_risk_distribution(simulation_log: list[dict]) -> dict[str, int]:
     """
     Compute the final risk distribution from the last tick's zone data.
-
-    Uses priority_score as a proxy since risk_score may not be directly
-    embedded in the evacuation plan. For accurate distribution, the
-    caller should pass zone_states with risk_score fields.
 
     Categories:
         low:    priority_score < 3

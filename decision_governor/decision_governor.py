@@ -21,7 +21,7 @@ VERIFIED FIELD SOURCES (from project file audit):
   zone["road_links"]           → Derived from road_adjacency.json edges
 
   road_adjacency shelters:
-    shelter["id"]              → road_adjacency.json → shelters[].id  (S1..S5)
+    shelter["id"]              → road_adjacency.json → shelters[].id  (S01..S03)
     shelter["zone"]            → road_adjacency.json → shelters[].zone
     shelter["capacity"]        → road_adjacency.json → shelters[].capacity
 
@@ -268,6 +268,8 @@ class DecisionGovernor:
         """
         scored: list[dict] = []
         for zone in zones:
+            if zone.get("status") == "evacuated":
+                continue
             enriched = deepcopy(zone)
             enriched["priority_score"] = self.compute_priority_score(
                 zone, available_routes
@@ -296,22 +298,6 @@ class DecisionGovernor:
     ) -> dict:
         """
         Generate a complete evacuation plan from ranked zones.
-
-        For each zone, attempts to assign:
-            - A route from MobilityAgent (if available_routes provided)
-            - A shelter (from the route's destination or from city_model shelters)
-
-        Handles edge cases:
-            - No usable route: assigned_route = null, zone still in plan
-            - All shelters full: assigned_shelter = null, rationale flags it
-
-        Args:
-            ranked_zones:     Output of rank_zones().
-            available_routes: Route data from MobilityAgent. Dict of
-                              {zone_name: RouteResult dict}.
-
-        Returns:
-            dict — evacuation plan with tick, timestamp, and sequence.
         """
         evacuation_sequence: list[dict] = []
         shelters_from_model = self._city_model.get("shelters", [])
@@ -343,20 +329,22 @@ class DecisionGovernor:
                 for s in shelters_from_model:
                     if s["id"] == route_destination:
                         current_occ = shelter_usage.get(s["id"], 0)
-                        if current_occ < s["capacity"] * self._max_shelter_capacity_pct:
+                        zone_pop = zone.get("population", 0)
+                        if current_occ + zone_pop <= s["capacity"] * self._max_shelter_capacity_pct:
                             assigned_shelter = s["id"]
                             shelter_for_rationale = s
-                            shelter_usage[s["id"]] = current_occ + 1
+                            shelter_usage[s["id"]] = current_occ + zone_pop
                             break
 
             # If no shelter from route, try any shelter with capacity
             if assigned_shelter is None:
                 for s in shelters_from_model:
                     current_occ = shelter_usage.get(s["id"], 0)
-                    if current_occ < s["capacity"] * self._max_shelter_capacity_pct:
+                    zone_pop = zone.get("population", 0)
+                    if current_occ + zone_pop <= s["capacity"] * self._max_shelter_capacity_pct:
                         assigned_shelter = s["id"]
                         shelter_for_rationale = s
-                        shelter_usage[s["id"]] = current_occ + 1
+                        shelter_usage[s["id"]] = current_occ + zone_pop
                         break
 
             # Generate rationale
@@ -366,17 +354,14 @@ class DecisionGovernor:
                 "rank": zone.get("evacuation_rank", 0),
                 "zone_id": zone_id,
                 "zone_name": zone_name,
-                "priority_score": zone.get("priority_score", 0.0),
+                "priority_score": round(zone.get("priority_score", 0.0), 2),
+                "risk_score": round(zone.get("risk_score", 0.0), 2),
+                "vulnerability_score": round(zone.get("vulnerability_score", 0.0), 2),
                 "assigned_route": assigned_route,
                 "assigned_shelter": assigned_shelter,
                 "rationale": rationale,
             }
             evacuation_sequence.append(entry)
-
-            # Log shelter assignment
-            shelter_label = assigned_shelter if assigned_shelter else "NONE (capacity exceeded)"
-            _log(f"Shelter assignment: {zone_name} → {shelter_label}",
-                 tick=self._current_tick)
 
         plan: dict = {
             "tick": self._current_tick,
@@ -388,6 +373,40 @@ class DecisionGovernor:
         self._simulation_log.append(deepcopy(plan))
 
         return plan
+
+    def generate_candidate_plans(
+        self,
+        zone_states: list[dict],
+        available_routes: Optional[dict] = None,
+    ) -> dict[str, dict]:
+        """
+        🧠 PHASE 7: Generate multiple candidate plans based on different priorities.
+        
+        Returns:
+            dict mapping strategy_name -> plan object.
+        """
+        strategies = {
+            "balanced": (0.4, 0.3, 0.2, 0.1),    # Default config-like
+            "safety_first": (0.7, 0.1, 0.1, 0.1), # Heavy on risk
+            "vulnerability_first": (0.1, 0.7, 0.1, 0.1), # Heavy on vulnerability
+        }
+        
+        # Backup original weights
+        original_weights = (self._w_risk, self._w_vulnerability, self._w_elderly, self._w_road_availability)
+        
+        candidate_plans = {}
+        for name, weights in strategies.items():
+            self._w_risk, self._w_vulnerability, self._w_elderly, self._w_road_availability = weights
+            ranked = self.rank_zones(zone_states, available_routes)
+            plan = self.generate_evacuation_plan(ranked, available_routes)
+            plan["strategy"] = name
+            candidate_plans[name] = plan
+            
+        # Restore original weights
+        self._w_risk, self._w_vulnerability, self._w_elderly, self._w_road_availability = original_weights
+        
+        return candidate_plans
+
 
     def handle_replan(self, trigger: dict) -> dict:
         """

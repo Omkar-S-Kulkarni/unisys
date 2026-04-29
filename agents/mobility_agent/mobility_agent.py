@@ -372,7 +372,8 @@ class MobilityAgent:
                 status="failed", reason=reason,
             )
 
-        best = max(candidates, key=lambda r: r.route_quality)
+        # Prioritize nearest (shortest distance) among non-failed routes
+        best = min(candidates, key=lambda r: r.total_distance_km)
         self._add_log(tick, "recalculation", {
             "from": from_zone,
             "chosen_shelter": best.to_zone,

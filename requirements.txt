@@ -13,3 +13,5 @@ click
 starlette
 watchfiles
 python-multipart
+httpx
+jsonschema

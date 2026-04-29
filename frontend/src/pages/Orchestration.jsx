@@ -9,17 +9,43 @@ const getRiskConfig = (risk) => {
   return { label: 'STABLE', color: 'text-emerald-500', bg: 'bg-emerald-500/10', border: 'border-emerald-500/50', bar: 'bg-emerald-500', action: 'SAFE' };
 };
 
-const ZoneCard = ({ zone, liveRisk }) => {
+const getLlmLevelBadge = (level) => {
+  if (!level) return null;
+  const configs = {
+    critical: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30' },
+    high: { bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500/30' },
+    moderate: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500/30' },
+    low: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', border: 'border-emerald-500/30' },
+    minimal: { bg: 'bg-cyan-500/20', text: 'text-cyan-400', border: 'border-cyan-500/30' },
+  };
+  const c = configs[level] || configs.moderate;
+  return (
+    <span className={`text-[8px] font-bold px-1 py-0.5 rounded border ${c.bg} ${c.text} ${c.border} uppercase tracking-wider`}>
+      AI:{level}
+    </span>
+  );
+};
+
+const ZoneCard = ({ zone, liveRisk, llmData }) => {
   const risk = liveRisk !== undefined ? liveRisk : zone.flood_risk_base;
   const config = getRiskConfig(risk);
+  const [showInsight, setShowInsight] = useState(false);
+
+  const hasLlm = llmData && llmData.reasoning;
 
   return (
-    <div className={`p-4 border-l-2 ${config.border} bg-[#16161a] hover:bg-[#1c1c21] transition-all group cursor-pointer`}>
+    <div 
+      className={`p-4 border-l-2 ${config.border} bg-[#16161a] hover:bg-[#1c1c21] transition-all group cursor-pointer relative`}
+      onClick={() => hasLlm && setShowInsight(!showInsight)}
+    >
       <div className="flex justify-between items-start mb-2">
         <span className="text-[10px] text-gray-500 font-mono tracking-tighter">ZONE_{zone.id.replace('Z', '0')}</span>
-        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-sm ${config.bg} ${config.color} border border-current/20`}>
-          {config.label}
-        </span>
+        <div className="flex items-center gap-1">
+          {hasLlm && getLlmLevelBadge(llmData.risk_level)}
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-sm ${config.bg} ${config.color} border border-current/20`}>
+            {config.label}
+          </span>
+        </div>
       </div>
       <div className="text-sm font-bold text-gray-200 uppercase tracking-wide mb-1 truncate">
         {zone.name.replace(' ', '_')}
@@ -36,6 +62,138 @@ const ZoneCard = ({ zone, liveRisk }) => {
       <div className="mt-3 h-0.5 bg-gray-800 w-full overflow-hidden">
         <div className={`h-full ${config.bar} transition-all duration-700`} style={{ width: `${Math.min(100, risk * 10)}%` }}></div>
       </div>
+      {/* LLM Source indicator */}
+      {hasLlm && (
+        <div className="mt-1.5 flex items-center gap-1">
+          <div className={`w-1.5 h-1.5 rounded-full ${llmData.source === 'llm' ? 'bg-violet-500' : 'bg-gray-600'}`}></div>
+          <span className="text-[8px] text-gray-600 font-mono tracking-wider uppercase">
+            {llmData.source === 'llm' ? 'AI ANALYZED' : 'RULE-BASED'}
+          </span>
+        </div>
+      )}
+      {/* Expandable LLM Insight */}
+      {showInsight && hasLlm && (
+        <div className="mt-3 p-2.5 bg-violet-500/5 border border-violet-500/20 rounded text-[10px] text-gray-400 leading-relaxed space-y-1.5">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="text-violet-400 font-bold tracking-wider text-[9px] uppercase">AI Insight</span>
+          </div>
+          <p className="text-gray-300">{llmData.reasoning}</p>
+          {llmData.recommendation && (
+            <p className="text-violet-300/80 italic">{llmData.recommendation}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ColorLegend = () => (
+  <div className="flex items-center gap-4 px-3 py-1.5 bg-[#111114] border border-gray-800 rounded-sm">
+    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mr-1">Scale:</span>
+    {[
+      { label: 'Critical', color: 'bg-red-500' },
+      { label: 'High', color: 'bg-orange-500' },
+      { label: 'Moderate', color: 'bg-yellow-500' },
+      { label: 'Stable', color: 'bg-emerald-500' }
+    ].map(item => (
+      <div key={item.label} className="flex items-center gap-1.5">
+        <div className={`w-1.5 h-1.5 ${item.color}`}></div>
+        <span className="text-[8px] text-gray-400 uppercase font-mono">{item.label}</span>
+      </div>
+    ))}
+  </div>
+);
+
+const RationalePanel = ({ topOrder }) => {
+  if (!topOrder) return (
+    <div className="h-full flex items-center justify-center text-gray-600 italic text-[10px]">
+      Awaiting priority sequence...
+    </div>
+  );
+
+  return (
+    <div className="p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-black text-gray-100 uppercase tracking-tight">{topOrder.zone_name}</span>
+        <span className="text-[10px] font-bold text-red-500 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20">PRIORITY 01</span>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-[#16161a] p-2 border border-gray-800">
+          <div className="text-[8px] text-gray-500 uppercase mb-1">Risk Score</div>
+          <div className="text-xl font-mono font-bold text-gray-200">{topOrder.risk_score?.toFixed(1) || '0.0'}</div>
+        </div>
+        <div className="bg-[#16161a] p-2 border border-gray-800">
+          <div className="text-[8px] text-gray-500 uppercase mb-1">Vulnerability</div>
+          <div className="text-xl font-mono font-bold text-gray-200">{topOrder.vulnerability_score?.toFixed(1) || '0.0'}</div>
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <div className="text-[8px] text-gray-500 uppercase tracking-widest font-bold">Tactical Rationale</div>
+        <p className="text-[10px] text-gray-400 leading-relaxed font-serif italic border-l-2 border-violet-500/40 pl-3 py-1 bg-violet-500/5">
+          "{topOrder.llm_rationale || topOrder.rationale || 'Pending tactical analysis...'}"
+        </p>
+      </div>
+    </div>
+  );
+};
+
+const ReplanLog = ({ events }) => (
+  <div className="flex-1 overflow-y-auto p-4 space-y-3 font-mono">
+    {events && events.length > 0 ? (
+      events.slice().reverse().map((event, i) => (
+        <div key={i} className="text-[9px] border-b border-gray-800/50 pb-2 last:border-0">
+          <div className="flex justify-between items-center mb-1">
+            <span className="text-orange-500 font-bold uppercase tracking-tighter">TRG::{event.trigger_type}</span>
+            <span className="text-gray-600 text-[8px]">{new Date(event.timestamp).toLocaleTimeString()}</span>
+          </div>
+          <div className="text-gray-400 leading-tight">
+            Tick {event.tick}: {event.details || `Forced recalculation on ${event.affected_zone_id}`}
+          </div>
+        </div>
+      ))
+    ) : (
+      <div className="text-[10px] text-gray-600 italic">No replanning events recorded.</div>
+    )}
+  </div>
+);
+
+const EvacuationSequence = ({ sequence, isAiActive }) => {
+  const topOrders = sequence.slice(0, 10);
+  return (
+    <div className="flex-1 overflow-y-auto p-4 space-y-2 font-mono">
+      {topOrders.length > 0 ? (
+        topOrders.map((order, i) => {
+          const statusColor = order.assigned_route ? 'text-emerald-400' : 'text-orange-400';
+          const statusLabel = order.assigned_route ? 'ROUTING' : 'NO ROUTE';
+          return (
+            <div key={i} className="flex items-center gap-4 text-[10px] border-b border-gray-800/30 pb-1.5 last:border-0">
+              <span className="text-red-500 font-bold w-3">{order.rank}</span>
+              <div className="flex-1 flex items-center gap-2">
+                <span className="font-bold text-gray-300 uppercase truncate max-w-[80px]">{order.zone_name}</span>
+                <span className="text-gray-600 text-[8px]">-&gt;</span>
+                <span className="font-bold text-gray-400 truncate max-w-[60px]">{order.assigned_shelter || '---'}</span>
+              </div>
+              <span className="text-gray-500 text-[8px]">{order.priority_score.toFixed(1)}</span>
+              <span className={`font-bold ${statusColor} text-[8px] tracking-tighter`}>{statusLabel}</span>
+            </div>
+          );
+        })
+      ) : (
+        <div className="text-[10px] text-gray-600 italic">No sequence data.</div>
+      )}
+    </div>
+  );
+};
+
+const OllamaStatusBadge = ({ status }) => {
+  if (!status) return null;
+  const isActive = status.available && status.enabled;
+  return (
+    <div className="flex items-center gap-2">
+      <div className={`w-2 h-2 rounded-full ${isActive ? 'bg-violet-500 animate-pulse' : 'bg-gray-600'}`}></div>
+      <span className={`text-[10px] font-bold uppercase tracking-wider ${isActive ? 'text-violet-400' : 'text-gray-500'}`}>
+        {isActive ? `AI: ${status.active_model || 'ACTIVE'}` : 'AI: OFFLINE'}
+      </span>
     </div>
   );
 };
@@ -48,6 +206,9 @@ export default function Orchestration() {
   const [evacPlan, setEvacPlan] = useState(null);
   const [zoneStates, setZoneStates] = useState([]);
   const [selectedRoad, setSelectedRoad] = useState('');
+  const [llmAnalysis, setLlmAnalysis] = useState({});
+  const [ollamaStatus, setOllamaStatus] = useState(null);
+  const [replanEvents, setReplanEvents] = useState([]);
 
   useEffect(() => {
     if (data && data.tick !== undefined) {
@@ -64,12 +225,28 @@ export default function Orchestration() {
       if (data.zone_states) {
         setZoneStates(data.zone_states);
       }
+
+      if (data.llm_analysis) {
+        setLlmAnalysis(data.llm_analysis);
+      }
+
+      if (data.ollama_status) {
+        setOllamaStatus(data.ollama_status);
+      }
+      
+      if (data.replan_events) {
+        setReplanEvents(data.replan_events);
+      }
     }
   }, [data]);
 
   const getLiveRisk = (zone) => {
     const rs = riskScores[zone.name];
     return rs !== undefined ? rs : undefined;
+  };
+
+  const getLlmData = (zone) => {
+    return llmAnalysis[zone.name] || null;
   };
 
   const evacSequence = evacPlan?.evacuation_sequence || [];
@@ -82,7 +259,9 @@ export default function Orchestration() {
   const shelterUsage = {};
   for (const entry of evacSequence) {
     if (entry.assigned_shelter) {
-      shelterUsage[entry.assigned_shelter] = (shelterUsage[entry.assigned_shelter] || 0) + 1;
+      const zone = cityData.zones.find(z => z.id === entry.zone_id || z.name === entry.zone_name);
+      const pop = zone?.population || 0;
+      shelterUsage[entry.assigned_shelter] = (shelterUsage[entry.assigned_shelter] || 0) + pop;
     }
   }
   const sheltersFromModel = cityData.shelters || [];
@@ -100,6 +279,8 @@ export default function Orchestration() {
     }
   };
 
+  const isAiActive = ollamaStatus?.available && ollamaStatus?.enabled;
+
   return (
     <div className="flex flex-col h-full space-y-6">
       <div className="flex items-center justify-between border-b border-gray-800 pb-2">
@@ -113,6 +294,9 @@ export default function Orchestration() {
           </span>
         </div>
         <div className="flex items-center gap-3">
+          <ColorLegend />
+          <OllamaStatusBadge status={ollamaStatus} />
+          <div className="h-4 w-px bg-gray-800"></div>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
             <span className="text-[10px] text-gray-400 font-bold uppercase">CONNECTED</span>
@@ -128,62 +312,93 @@ export default function Orchestration() {
 
           <div className="grid grid-cols-4 gap-4">
             {zones.map(zone => (
-              <ZoneCard key={zone.id} zone={zone} liveRisk={getLiveRisk(zone)} />
+              <ZoneCard key={zone.id} zone={zone} liveRisk={getLiveRisk(zone)} llmData={getLlmData(zone)} />
             ))}
           </div>
 
           <div className="grid grid-cols-2 gap-6 h-64 min-h-[16rem]">
             <div className="flex flex-col border border-gray-800/50 bg-[#111114]">
               <div className="px-4 py-2 border-b border-gray-800 flex items-center justify-between">
-                <span className="text-[10px] font-bold text-gray-400 tracking-[0.1em] uppercase">Evacuation Orders (Live)</span>
-                <span className="text-[10px] text-emerald-500 font-mono">{evacSequence.length} zones</span>
-              </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 font-mono">
-                {topEvacOrders.length > 0 ? (
-                  topEvacOrders.map((order, i) => {
-                    const statusColor = order.assigned_route ? 'text-emerald-400' : 'text-orange-400';
-                    const statusLabel = order.assigned_route ? 'ROUTING' : 'NO ROUTE';
-                    return (
-                      <div key={i} className="flex items-center gap-4 text-[11px] group cursor-pointer hover:bg-white/5 p-1 -m-1 rounded">
-                        <span className="text-red-500 font-bold w-4">{order.rank}</span>
-                        <div className="flex-1 flex items-center gap-2">
-                          <span className="font-bold text-gray-300 uppercase">{order.zone_name}</span>
-                          <span className="text-gray-600 text-[10px]">-&gt;</span>
-                          <span className="font-bold text-gray-300">{order.assigned_shelter || '---'}</span>
-                        </div>
-                        <span className="text-gray-500 font-mono text-[9px]">{order.priority_score.toFixed(2)}</span>
-                        <span className={`font-bold ${statusColor} text-[9px] tracking-tighter`}>{statusLabel}</span>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="text-[11px] text-gray-600 italic">Waiting for simulation data...</div>
+                <span className="text-[10px] font-bold text-gray-400 tracking-[0.1em] uppercase">Detailed Strategy Analysis</span>
+                {evacSequence.length > 0 && (
+                   <span className="text-[8px] font-mono text-gray-500 uppercase">Focus: {evacSequence[0].zone_name}</span>
                 )}
               </div>
+              <RationalePanel topOrder={evacSequence[0]} />
             </div>
 
             <div className="flex flex-col border border-gray-800/50 bg-[#111114]">
               <div className="px-4 py-2 border-b border-gray-800 flex items-center justify-between">
-                <span className="text-[10px] font-bold text-gray-400 tracking-[0.1em] uppercase">Decision Log</span>
-                <span className="text-[10px] text-gray-500 font-mono">{globalLogs.length} entries</span>
+                <span className="text-[10px] font-bold text-gray-400 tracking-[0.1em] uppercase">Replanning History</span>
+                <span className="text-[10px] text-gray-500 font-mono">{replanEvents.length} events</span>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-2 font-mono">
-                {globalLogs.length > 0 ? (
-                  globalLogs.slice(0, 20).map((log, i) => (
-                    <div key={i} className="flex gap-3 text-[10px] leading-relaxed">
-                      <span className="text-emerald-500/60 shrink-0">{log.time}</span>
-                      <span className={log.color}>{log.msg}</span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-[10px] text-gray-600 italic">Waiting for tick data...</div>
-                )}
-              </div>
+              <ReplanLog events={replanEvents} />
             </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-6 h-48 min-h-[12rem]">
+             <div className="flex flex-col border border-gray-800/50 bg-[#111114]">
+                <div className="px-4 py-2 border-b border-gray-800 flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-gray-400 tracking-[0.1em] uppercase">Evacuation Sequence</span>
+                  <span className="text-[10px] text-emerald-500 font-mono">{evacSequence.length} ZONES</span>
+                </div>
+                <EvacuationSequence sequence={evacSequence} isAiActive={isAiActive} />
+             </div>
+
+             <div className="flex flex-col border border-gray-800/50 bg-[#111114]">
+                <div className="px-4 py-2 border-b border-gray-800 flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-gray-400 tracking-[0.1em] uppercase">Global System Log</span>
+                  <span className="text-[10px] text-gray-500 font-mono">{globalLogs.length}</span>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 space-y-1 font-mono">
+                  {globalLogs.length > 0 ? (
+                    globalLogs.slice(0, 8).map((log, i) => (
+                      <div key={i} className="flex gap-3 text-[9px] leading-relaxed">
+                        <span className="text-emerald-500/60 shrink-0">{log.time}</span>
+                        <span className={log.color + " truncate"}>{log.msg}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-[9px] text-gray-600 italic">Waiting...</div>
+                  )}
+                </div>
+             </div>
           </div>
         </div>
 
         <div className="flex-1 flex flex-col gap-6">
+
+          {/* AI Status Panel */}
+          <div className="flex flex-col border border-gray-800/50 bg-[#111114]">
+            <div className="px-4 py-2 border-b border-gray-800 flex items-center justify-between">
+              <span className="text-[10px] font-bold text-gray-400 tracking-[0.1em] uppercase">AI Engine Status</span>
+              <div className={`w-2 h-2 rounded-full ${isAiActive ? 'bg-violet-500 animate-pulse' : 'bg-gray-600'}`}></div>
+            </div>
+            <div className="p-4 space-y-2.5">
+              <div className="flex justify-between items-center text-[10px]">
+                <span className="text-gray-500 font-mono">MODEL</span>
+                <span className={`font-bold ${isAiActive ? 'text-violet-300' : 'text-gray-500'} font-mono`}>
+                  {ollamaStatus?.active_model || 'NONE'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-[10px]">
+                <span className="text-gray-500 font-mono">STATUS</span>
+                <span className={`font-bold uppercase tracking-wider ${isAiActive ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {isAiActive ? 'ACTIVE' : 'FALLBACK MODE'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-[10px]">
+                <span className="text-gray-500 font-mono">CACHE</span>
+                <span className="font-bold text-gray-400 font-mono">{ollamaStatus?.cache_size || 0} items</span>
+              </div>
+              <div className="flex justify-between items-center text-[10px]">
+                <span className="text-gray-500 font-mono">MODE</span>
+                <span className={`font-bold text-[9px] px-1.5 py-0.5 rounded ${isAiActive ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30' : 'bg-gray-700/50 text-gray-400 border border-gray-600/30'}`}>
+                  {isAiActive ? 'LLM-DRIVEN' : 'RULE-BASED'}
+                </span>
+              </div>
+            </div>
+          </div>
 
           <div className="flex flex-col border border-gray-800/50 bg-[#111114]">
             <div className="px-4 py-2 border-b border-gray-800">
@@ -208,8 +423,14 @@ export default function Orchestration() {
               <button 
                 onClick={handleManualOverride}
                 disabled={!selectedRoad}
-                className="w-full bg-red-600/20 text-red-500 border border-red-600/50 hover:bg-red-600 hover:text-white transition-all text-[10px] font-bold tracking-widest py-2 rounded uppercase disabled:opacity-50 disabled:cursor-not-allowed">
-                Trigger Replan / Flood Route
+                className="w-full bg-red-600/10 text-red-500 border border-red-600/30 hover:bg-red-600 hover:text-white transition-all text-[10px] font-bold tracking-widest py-2 rounded uppercase disabled:opacity-50 disabled:cursor-not-allowed mb-2">
+                Flood Route Segment
+              </button>
+              
+              <button 
+                onClick={() => sendCommand("EMERGENCY_REPLAN", {})}
+                className="w-full bg-orange-600/20 text-orange-500 border border-orange-600/50 hover:bg-orange-600 hover:text-white transition-all text-[10px] font-bold tracking-widest py-2 rounded uppercase">
+                Emergency Replan (Global)
               </button>
             </div>
           </div>

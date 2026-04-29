@@ -9,5 +9,13 @@
     "replan_cooldown_ticks": 2,
     "max_shelter_capacity_pct": 0.9,
     "risk_threshold_for_replan": 7.5
+  },
+  "ollama": {
+    "host": "http://127.0.0.1:11434",
+    "model": "llama3.2:3b",
+    "fallback_model": "qwen2.5-coder:7b",
+    "timeout_seconds": 30,
+    "enabled": true,
+    "cache_ttl_seconds": 30
   }
 }

@@ -1,0 +1,238 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Agent Contracts Schema",
+  "description": "Schema definitions for inter-agent communication contracts in the ADEO_UIP17 system",
+  "type": "object",
+  "properties": {
+    "risk_agent_output": {
+      "type": "object",
+      "description": "Output schema for Risk Agent - risk scores per zone",
+      "patternProperties": {
+        ".*": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10,
+          "description": "Risk score from 0 to 10 for each zone"
+        }
+      },
+      "additionalProperties": false
+    },
+    "risk_agent_llm_output": {
+      "type": "object",
+      "description": "LLM-enhanced risk analysis output",
+      "patternProperties": {
+        ".*": {
+          "type": "object",
+          "properties": {
+            "risk_score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "risk_level": {
+              "type": "string",
+              "enum": ["minimal", "low", "moderate", "high", "critical"]
+            },
+            "reasoning": {
+              "type": "string"
+            },
+            "recommendation": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string",
+              "enum": ["llm", "rule-based"]
+            }
+          },
+          "required": ["risk_score", "risk_level", "reasoning", "recommendation", "source"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "vulnerability_agent_output": {
+      "type": "array",
+      "description": "Output schema for Vulnerability Agent - ranked list of zones",
+      "items": {
+        "type": "object",
+        "properties": {
+          "zone_id": {
+            "type": "string"
+          },
+          "zone_name": {
+            "type": "string"
+          },
+          "vulnerability_score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "rank": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "priority_tier": {
+            "type": "string",
+            "enum": ["Critical", "High", "Medium", "Low"],
+            "description": "Phase 5 tier assignment"
+          },
+          "breakdown": {
+            "type": "object",
+            "properties": {
+              "elderly_impact": {
+                "type": "number"
+              },
+              "density_impact": {
+                "type": "number"
+              },
+              "hospital_gap": {
+                "type": "number"
+              }
+            }
+          },
+          "alerts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["zone_id", "zone_name", "vulnerability_score", "rank"]
+      }
+    },
+    "mobility_agent_output": {
+      "type": "object",
+      "description": "Output schema for Mobility Agent tick update",
+      "properties": {
+        "tick": {
+          "type": "integer"
+        },
+        "routes": {
+          "type": "object",
+          "description": "Routes per zone",
+          "patternProperties": {
+            ".*": {
+              "type": "object",
+              "properties": {
+                "tick": {
+                  "type": "integer"
+                },
+                "from_zone": {
+                  "type": "string"
+                },
+                "to_zone": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "edges_used": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "total_distance_km": {
+                  "type": "number"
+                },
+                "congestion_score": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "route_quality": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["ok", "degraded", "failed"]
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": ["tick", "from_zone", "to_zone", "path", "total_distance_km", "congestion_score", "route_quality", "status"]
+            }
+          }
+        },
+        "removed_edges": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "logs": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "summary": {
+          "type": "object"
+        }
+      },
+      "required": ["tick", "routes", "removed_edges", "logs", "summary"]
+    },
+    "governor_output": {
+      "type": "object",
+      "description": "Output schema for Decision Governor evacuation plan",
+      "properties": {
+        "tick": {
+          "type": "integer"
+        },
+        "evacuation_sequence": {
+          "type": "array",
+          "description": "Ordered list of evacuation assignments",
+          "items": {
+            "type": "object",
+            "properties": {
+              "rank": {
+                "type": "integer"
+              },
+              "zone_id": {
+                "type": "string"
+              },
+              "zone_name": {
+                "type": "string"
+              },
+              "priority_score": {
+                "type": "number"
+              },
+              "assigned_route": {
+                "type": ["object", "null"]
+              },
+              "assigned_shelter": {
+                "type": ["string", "null"]
+              },
+              "rationale": {
+                "type": "string"
+              }
+            },
+            "required": ["rank", "zone_id", "zone_name", "priority_score", "assigned_route", "assigned_shelter", "rationale"]
+          }
+        },
+        "timestamp": {
+          "type": "string"
+        },
+        "candidate_plans": {
+          "type": "object",
+          "description": "Alternative strategic plans (Balanced, Safety-First, etc.)",
+          "patternProperties": {
+            ".*": {
+              "type": "object",
+              "$ref": "#/properties/governor_output"
+            }
+          }
+        }
+      },
+      "required": ["tick", "evacuation_sequence", "timestamp"]
+    }
+  }
+}

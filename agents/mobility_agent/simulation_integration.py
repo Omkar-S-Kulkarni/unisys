@@ -26,8 +26,8 @@ from typing import Any
 from agents.mobility_agent.mobility_agent import MobilityAgent
 from agents.mobility_agent.websocket_bridge import MobilityBridge
 
-ROOT_DIR = os.path.abspath(os.curdir)
-_DATA_DIR = os.path.join(ROOT_DIR, "data")
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+_DATA_DIR = os.path.join(ROOT_DIR, "frontend", "src", "data")
 
 
 class MobilityIntegration:

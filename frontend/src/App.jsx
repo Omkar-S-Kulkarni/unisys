@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import Navbar from "./components/Navbar";
 import Sidebar from "./components/Sidebar";
 import { Routes, Route } from "react-router-dom";
@@ -6,15 +7,30 @@ import ZonalAnalysis from "./pages/ZonalAnalysis";
 import ShelterStatus from "./pages/ShelterStatus";
 import ReplanLog from "./pages/ReplanLog";
 import RoutePlan from "./pages/RoutePlan";
+import PostAnalysis from "./pages/PostAnalysis";
 import { SocketProvider } from "./context/SocketContext";
 
 export default function App() {
+  const [theme, setTheme] = useState("dark");
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("adeo_theme");
+    setTheme(stored === "light" ? "light" : "dark");
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.remove("light", "dark");
+    root.classList.add(theme);
+    window.localStorage.setItem("adeo_theme", theme);
+  }, [theme]);
+
   return (
     <SocketProvider>
-      <div className="h-screen bg-[#0e0e10] text-white flex flex-col overflow-hidden">
+      <div className="h-screen flex flex-col overflow-hidden bg-surface text-surface-foreground">
 
         {/* Top Navbar */}
-        <Navbar />
+        <Navbar theme={theme} setTheme={setTheme} />
 
         {/* Main Layout */}
         <div className="flex flex-1 overflow-hidden">
@@ -23,13 +39,14 @@ export default function App() {
           <Sidebar />
 
           {/* Page Content */}
-          <main className="p-6 flex-1 overflow-y-auto no-scrollbar bg-[#0e0e10]">
+          <main className="p-6 flex-1 overflow-y-auto no-scrollbar bg-surface">
             <Routes>
               <Route path="/" element={<Orchestration />} />
               <Route path="/route-plan" element={<RoutePlan />} />
               <Route path="/zonal" element={<ZonalAnalysis />} />
               <Route path="/shelter" element={<ShelterStatus />} />
               <Route path="/replan" element={<ReplanLog />} />
+              <Route path="/analysis" element={<PostAnalysis />} />
             </Routes>
           </main>
 
@@ -38,4 +55,4 @@ export default function App() {
       </div>
     </SocketProvider>
   );
-}
+}

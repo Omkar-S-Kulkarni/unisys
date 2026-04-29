@@ -1,15 +1,25 @@
 import sys
 import os
+import logging
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import asyncio
 import json
 import random
+from datetime import datetime, timezone
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from agents.mobility_agent.mobility_agent import MobilityAgent
 from decision_governor.decision_governor import DecisionGovernor
-from agents.vulnerability_agent.vulnerability_agent import calculate_zone_vulnerability
+from agents.vulnerability_agent.vulnerability_agent import calculate_zone_vulnerability, run_vulnerability_sweep
 from agents.risk_agent import RiskForecastAgent
+from agents.ollama_client import OllamaClient
+from decision_governor import rationale_generator as rg
+from decision_governor import summary_generator as sg
+from schema_validator import (
+    load_contracts_schema,
+    get_contract_subschema,
+    validate_payload,
+)
 
 app = FastAPI()
 
@@ -20,6 +30,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+logger = logging.getLogger("ADEOBackend")
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("[%(name)s][%(levelname)s][tick=%(tick)s] %(message)s"))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+
+
+def _log_validation_errors(source: str, errors: list[dict], tick: int = 0) -> None:
+    for err in errors:
+        path = ".".join(str(p) for p in err.get("path", [])) or "<root>"
+        logger.error(
+            f"Validation failed for {source}: {err['message']} at {path}",
+            extra={"tick": tick},
+        )
+
 
 @app.get("/")
 async def root():
@@ -33,25 +60,57 @@ with open(os.path.join(_ROOT, "config.json")) as _f:
 with open(os.path.join(_ROOT, "agents", "vulnerability_agent", "data", "city_model.json")) as _f:
     city_model = json.load(_f)
 
+SCHEMA_PATH = os.path.join(_ROOT, "schemas", "agent_contracts.json")
+contracts_schema = load_contracts_schema(SCHEMA_PATH)
+risk_schema = get_contract_subschema(contracts_schema, "risk_agent_output")
+vuln_schema = get_contract_subschema(contracts_schema, "vulnerability_agent_output")
+mobility_schema = get_contract_subschema(contracts_schema, "mobility_agent_output")
+llm_risk_schema = get_contract_subschema(contracts_schema, "risk_agent_llm_output")
+governor_schema = get_contract_subschema(contracts_schema, "governor_output")
+
+# ── Initialize Ollama Client ──────────────────────────────────────────────────
+ollama_config = config.get("ollama", {})
+ollama_client = OllamaClient(
+    host=ollama_config.get("host", "http://127.0.0.1:11434"),
+    model=ollama_config.get("model", "llama3.2:3b"),
+    fallback_model=ollama_config.get("fallback_model", "qwen2.5-coder:7b"),
+    timeout=ollama_config.get("timeout_seconds", 30),
+    cache_ttl=ollama_config.get("cache_ttl_seconds", 30),
+    enabled=ollama_config.get("enabled", True),
+)
+
+# Inject Ollama client into all modules that need it
+rg.set_ollama_client(ollama_client)
+sg.set_ollama_client(ollama_client)
+
+# ── Initialize Agents ─────────────────────────────────────────────────────────
 mobility_agent = MobilityAgent()
 decision_governor = DecisionGovernor(config=config, city_model=city_model)
-risk_agent = RiskForecastAgent(os.path.join(_ROOT, "agents", "data"))
+risk_agent = RiskForecastAgent(os.path.join(_ROOT, "agents", "data"), ollama_client=ollama_client)
 
-vulnerability_scores = {}
-for z in city_model["zones"]:
-    result = calculate_zone_vulnerability(z)
-    vulnerability_scores[z["name"]] = result.vulnerability_score
 
+# ── WebSocket Clients ────────────────────────────────────────────────────────
 clients = set()
 
 simulation_state = {
     "tick": 0,
-    "isRunning": False, # start paused
-    "scenario": "moderate_flood",
-    "manual_step": False
+    "isRunning": False, 
+    "scenario": "severe_flood",
+    "manual_step": False,
+    "manual_replan_requested": False,
+    "replan_events": [],
+    "evacuated_zones": [],
+    "evacuation_complete": False,
+    "evacuated_population": {}, # zone_name -> count
+    "zone_evacuation_steps": {}, # zone_name -> steps_count
 }
 
+# Store the latest LLM analysis for API access
+_latest_llm_analysis: dict = {}
+_latest_llm_rationales: dict = {}
+
 async def simulation_loop():
+    global _latest_llm_analysis, _latest_llm_rationales
     while True:
         # Check if we should run this tick
         should_run = simulation_state["isRunning"] or simulation_state["manual_step"]
@@ -63,13 +122,25 @@ async def simulation_loop():
             scenario = simulation_state["scenario"]
 
             zones = [
-                "Bellandur", "Sarjapur", "Whitefield", "HSR Layout", "Koramangala",
-                "BTM Layout", "Jayanagar", "Rajajinagar", "Hebbal", "Yelahanka",
-                "Electronic City", "Marathahalli"
+                "Whitefield", "Koramangala", "HSR Layout", "Sarjapur", "Indiranagar",
+                "Mahadevapura", "Bellandur", "Marathahalli", "BTM Layout", "Electronic City",
+                "Hebbal", "Yelahanka"
             ]
             
-            # 1. Generate risk scores (from RiskForecastAgent)
+            # 1. Generate risk scores (from RiskForecastAgent — rule-based baseline)
             risk_scores = risk_agent.get_risk_scores(tick, scenario, city_model["zones"])
+            
+            # Validate Risk Output
+            is_valid_risk, risk_errors = validate_payload(risk_schema, risk_scores)
+            if not is_valid_risk:
+                _log_validation_errors("Risk Agent", risk_errors, tick)
+                # If invalid, we continue but log the rejection
+                logger.error(f"Tick {tick}: Risk output REJECTED due to validation errors", extra={"tick": tick})
+
+            # 1b. Fire LLM risk analysis asynchronously (non-blocking)
+            llm_analysis_task = asyncio.create_task(
+                risk_agent.get_llm_risk_analysis(tick, scenario, city_model["zones"], risk_scores)
+            )
 
             # 2. Update Mobility Agent
             tick_data = mobility_agent.update_tick(
@@ -78,20 +149,53 @@ async def simulation_loop():
                 zones_to_evacuate=zones
             )
 
-            # 3. Build zone_states
+            # Validate Mobility Output
+            is_valid_mobility, mobility_errors = validate_payload(mobility_schema, tick_data)
+            if not is_valid_mobility:
+                _log_validation_errors("Mobility Agent", mobility_errors, tick)
+                logger.error(f"Tick {tick}: Mobility output REJECTED due to validation errors", extra={"tick": tick})
+
+            # 3. Run Vulnerability Sweep (Dynamic per tick as per Phase 8)
+            vulnerability_sweep = run_vulnerability_sweep(
+                os.path.join(_ROOT, "agents", "vulnerability_agent", "data", "city_model.json"),
+                mode="synthetic"
+            )
+            
+            # Validate Vulnerability Output
+            is_valid_vuln, vuln_errors = validate_payload(vuln_schema, vulnerability_sweep)
+            if not is_valid_vuln:
+                _log_validation_errors("Vulnerability Agent", vuln_errors, tick)
+                logger.error(f"Tick {tick}: Vulnerability output REJECTED due to validation errors", extra={"tick": tick})
+
+            # 4. Build zone_states (Collecting all agent outputs)
             zone_states = []
             zone_lookup = {z["name"]: z for z in city_model["zones"]}
+            vulnerability_map = {v["zone_name"]: v for v in vulnerability_sweep}
+            
             for zone_name in zones:
                 base = dict(zone_lookup.get(zone_name, {"id": "?", "name": zone_name}))
                 base["risk_score"] = risk_scores.get(zone_name, 0.0)
-                base["vulnerability_score"] = vulnerability_scores.get(zone_name, 0.0)
+                
+                vuln_data = vulnerability_map.get(zone_name, {})
+                base["vulnerability_score"] = vuln_data.get("vulnerability_score", 0.0)
+                base["priority_tier"] = vuln_data.get("priority_tier", "Low")
+                
+                # Metadata for Decision Governor
+                base["elderly_pct"] = base.get("elderly_pct", 0) 
+                
                 zone_states.append(base)
 
-            # 4. Check Replan Triggers
+            # 5. Check Replan Triggers
             replan_triggered = False
             replan_trigger = None
             
-            #   Condition A: Risk threshold exceeded
+            #   Condition A: Manual Emergency Replan (Phase 9)
+            if simulation_state.get("manual_replan_requested", False):
+                replan_triggered = True
+                replan_trigger = {"trigger_type": "manual_emergency", "affected_zone_id": "ALL", "tick": tick}
+                simulation_state["manual_replan_requested"] = False # Reset flag
+
+            #   Condition B: Risk threshold exceeded
             threshold = config["decision_governor"].get("risk_threshold_for_replan", 7.5)
             if not replan_triggered:
                 for zs in zone_states:
@@ -110,16 +214,21 @@ async def simulation_loop():
                         replan_trigger = {"trigger_type": "route_flooded", "affected_zone_id": z_id, "tick": tick}
                         break
 
-            #   Condition C: Shelter reaches 90% capacity
+            #   Condition D: Shelter reaches 90% capacity (Phase 9)
             if not replan_triggered:
                 # Estimate shelter occupancy from the last plan + model base
                 last_plan = decision_governor.get_last_plan()
                 if last_plan:
+                    # Start with current city model occupancy
                     shelter_usage = {s["id"]: s.get("current_occupancy", 0) for s in city_model.get("shelters", [])}
+                    
+                    # Add populations of zones assigned in the last plan
                     for seq in last_plan.get("evacuation_sequence", []):
-                        sh = seq.get("assigned_shelter")
-                        if sh:
-                            shelter_usage[sh] = shelter_usage.get(sh, 0) + 1
+                        sh_id = seq.get("assigned_shelter")
+                        z_id = seq.get("zone_id")
+                        if sh_id and z_id:
+                            zone_pop = zone_lookup.get(seq.get("zone_name"), {}).get("population", 0)
+                            shelter_usage[sh_id] = shelter_usage.get(sh_id, 0) + zone_pop
                             
                     # check capacity limits
                     for s in city_model.get("shelters", []):
@@ -127,22 +236,193 @@ async def simulation_loop():
                         cap = s.get("capacity", 1)
                         if occ / cap >= 0.9:
                             replan_triggered = True
-                            replan_trigger = {"trigger_type": "shelter_full", "affected_zone_id": s["id"], "tick": tick}
+                            replan_trigger = {
+                                "trigger_type": "shelter_full", 
+                                "affected_zone_id": s["id"], 
+                                "tick": tick,
+                                "details": f"Shelter {s['id']} projected at {round(occ/cap*100, 1)}% capacity"
+                            }
                             break
 
-            # 5. Run Decision Governor
-            evac_plan = decision_governor.on_tick({
+            if replan_triggered and replan_trigger:
+                replan_trigger["timestamp"] = datetime.now(timezone.utc).isoformat()
+                simulation_state["replan_events"].append(replan_trigger)
+                # Keep only last 50 events
+                if len(simulation_state["replan_events"]) > 50:
+                    simulation_state["replan_events"].pop(0)
+
+            # 6. Run Decision Governor
+            tick_state = {
                 "tick": tick,
                 "zone_states": zone_states,
                 "available_routes": tick_data.get("routes"),
                 "replan_triggered": replan_triggered,
                 "replan_trigger": replan_trigger,
-            })
+            }
+            evac_plan = decision_governor.on_tick(tick_state)
+            
+            # 7. Generate candidate plans (strategic alternatives)
+            candidate_plans = decision_governor.generate_candidate_plans(
+                zone_states, 
+                available_routes=tick_data.get("routes")
+            )
 
-            # 6. Broadcast to clients
+            # Validate Governor Output
+            is_valid_gov, gov_errors = validate_payload(governor_schema, evac_plan)
+            if not is_valid_gov:
+                _log_validation_errors("Decision Governor", gov_errors, tick)
+                logger.error(f"Tick {tick}: Governor plan REJECTED due to validation errors", extra={"tick": tick})
+
+            # 8. Await the LLM analysis result (should be done by now or will finish soon)
+            try:
+                llm_analysis = await asyncio.wait_for(llm_analysis_task, timeout=15.0)
+                _latest_llm_analysis = llm_analysis or {}
+                
+                # Validate LLM Risk Output
+                if _latest_llm_analysis:
+                    is_valid_llm, llm_errors = validate_payload(llm_risk_schema, _latest_llm_analysis)
+                    if not is_valid_llm:
+                        _log_validation_errors("Risk Agent (LLM)", llm_errors, tick)
+                        logger.error(f"Tick {tick}: LLM Risk analysis REJECTED due to validation errors", extra={"tick": tick})
+            except (asyncio.TimeoutError, Exception) as e:
+                _latest_llm_analysis = risk_agent.get_last_llm_analysis() or {}
+
+            # 9. Fire LLM batch rationales asynchronously
+            try:
+                ranked_zones = evac_plan.get("evacuation_sequence", [])
+                llm_rationales = await asyncio.wait_for(
+                    rg.generate_batch_rationales(
+                        ranked_zones,
+                        tick_data.get("routes"),
+                        city_model.get("shelters", []),
+                    ),
+                    timeout=15.0,
+                )
+                _latest_llm_rationales = llm_rationales
+            except (asyncio.TimeoutError, Exception):
+                _latest_llm_rationales = {}
+
+            # Enrich evacuation plan entries with LLM data and batch info
+            for entry in evac_plan.get("evacuation_sequence", []):
+                z_name = entry.get("zone_name", "")
+
+                # Add batch info for the top 3
+                if z_name in [e.get("zone_name") for e in evac_plan.get("evacuation_sequence", [])[:3]]:
+                    steps = simulation_state["zone_evacuation_steps"].get(z_name, 0)
+                    # Use the same logic as step 10 to predict next batch
+                    next_steps = steps + 1
+                    if next_steps == 1: b = 100
+                    elif next_steps == 2: b = 200
+                    elif next_steps == 3: b = 250
+                    else: b = 300 + (next_steps - 4) * 50
+                    
+                    total_pop = zone_lookup.get(z_name, {}).get("population", 0)
+                    already_evac = simulation_state["evacuated_population"].get(z_name, 0)
+                    entry["next_batch_size"] = min(b, total_pop - already_evac)
+                else:
+                    entry["next_batch_size"] = 0
+
+                # Add LLM risk analysis
+                if zone_name in _latest_llm_analysis:
+                    analysis = _latest_llm_analysis[zone_name]
+                    entry["llm_risk_reasoning"] = analysis.get("reasoning", "")
+                    entry["llm_risk_level"] = analysis.get("risk_level", "")
+                    entry["llm_recommendation"] = analysis.get("recommendation", "")
+                    entry["analysis_source"] = analysis.get("source", "rule-based")
+
+                # Add LLM rationale (override template if available)
+                if zone_name in _latest_llm_rationales:
+                    entry["llm_rationale"] = _latest_llm_rationales[zone_name]
+
+            # 10. Update Shelter Occupancy & Evacuated Status (Phase 12) - INCREMENTAL
+            newly_evacuated = []
+            evacuation_updates = []
+            for entry in evac_plan.get("evacuation_sequence", [])[:3]:
+                z_name = entry.get("zone_name")
+                s_id = entry.get("assigned_shelter")
+                has_route = entry.get("assigned_route") is not None
+                
+                if z_name and s_id and has_route and z_name not in simulation_state["evacuated_zones"]:
+                    # Incremental Batch Logic
+                    steps = simulation_state["zone_evacuation_steps"].get(z_name, 0)
+                    steps += 1
+                    simulation_state["zone_evacuation_steps"][z_name] = steps
+                    
+                    # Batch size: 100, 200, 250, 300... as requested
+                    if steps == 1: batch_size = 100
+                    elif steps == 2: batch_size = 200
+                    elif steps == 3: batch_size = 250
+                    else: batch_size = 300 + (steps - 4) * 50
+                    
+                    total_pop = zone_lookup.get(z_name, {}).get("population", 0)
+                    already_evac = simulation_state["evacuated_population"].get(z_name, 0)
+                    remaining = total_pop - already_evac
+                    
+                    actual_move = min(batch_size, remaining)
+                    
+                    if actual_move <= 0:
+                        continue
+
+                    # Find shelter in city_model
+                    for s in city_model["shelters"]:
+                        if s["id"] == s_id:
+                            # Respect capacity (with 5% buffer)
+                            if s["current_occupancy"] + actual_move <= s["capacity"] * 1.05:
+                                s["current_occupancy"] += actual_move
+                                simulation_state["evacuated_population"][z_name] = already_evac + actual_move
+                                
+                                # Update zone status in city_model
+                                for z in city_model["zones"]:
+                                    if z["name"] == z_name:
+                                        z["remaining_population"] = total_pop - (already_evac + actual_move)
+                                        if z["remaining_population"] <= 0:
+                                            z["status"] = "evacuated"
+                                            simulation_state["evacuated_zones"].append(z_name)
+                                            newly_evacuated.append(z_name)
+                                        else:
+                                            z["status"] = "partially_evacuated"
+                                            evacuation_updates.append(f"{z_name}: +{actual_move}")
+                                        break
+                                logger.info(f"Tick {tick}: {z_name} moved {actual_move} to {s_id} (Total: {already_evac + actual_move}/{total_pop})")
+                            break
+
+            # 11. Aggregate System Logs (Phase 10)
+            system_logs = []
+            # Add newly evacuated logs
+            for z in newly_evacuated:
+                system_logs.append({
+                    "tick": tick,
+                    "type": "evacuation_success",
+                    "message": f"SUCCESS: {z} fully evacuated.",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                })
+            
+            # Add incremental evacuation logs
+            for up in evacuation_updates:
+                system_logs.append({
+                    "tick": tick,
+                    "type": "evacuation_update",
+                    "message": f"IN PROGRESS: {up} citizens moving to shelter.",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                })
+            
+            # Add mobility logs
+            system_logs.extend(tick_data.get("logs", []))
+            # Add replan logs (last 5)
+            for event in simulation_state["replan_events"][-5:]:
+                system_logs.append({
+                    "tick": event["tick"],
+                    "type": "replan_event",
+                    "message": f"REPLAN [{event['trigger_type']}] triggered for {event['affected_zone_id']}",
+                    "timestamp": event["timestamp"]
+                })
+            
+            # 12. Broadcast to clients
             combined_payload = {
                 **tick_data,
+                "system_logs": system_logs,
                 "evacuation_plan": evac_plan,
+                "candidate_plans": candidate_plans,
                 "risk_scores": risk_scores,
                 "zone_states": [
                     {
@@ -150,12 +430,25 @@ async def simulation_loop():
                         "zone_name": zs["name"],
                         "risk_score": zs["risk_score"],
                         "vulnerability_score": zs["vulnerability_score"],
+                        "priority_tier": zs.get("priority_tier", "Low"),
                         "elderly_pct": zs.get("elderly_pct", 0),
                         "elevation_tier": zs.get("elevation_tier", "mid"),
                     }
                     for zs in zone_states
                 ],
-                "simulation_state": simulation_state
+                "replan_events": simulation_state["replan_events"],
+                "simulation_state": simulation_state,
+                "llm_analysis": {
+                    zone_name: {
+                        "risk_level": data.get("risk_level", ""),
+                        "reasoning": data.get("reasoning", ""),
+                        "recommendation": data.get("recommendation", ""),
+                        "source": data.get("source", "rule-based"),
+                    }
+                    for zone_name, data in _latest_llm_analysis.items()
+                },
+                "ollama_status": ollama_client.get_status(),
+                "city_model": city_model,
             }
 
             if clients:
@@ -172,6 +465,13 @@ async def simulation_loop():
 
 @app.on_event("startup")
 async def startup_event():
+    # Check Ollama availability at startup
+    available = await ollama_client.is_available()
+    if available:
+        models = await ollama_client.list_models()
+        print(f"[ADEO] Ollama connected — active model: {ollama_client.active_model}, available: {models}")
+    else:
+        print("[ADEO] Ollama not available — running in rule-based fallback mode")
     asyncio.create_task(simulation_loop())
 
 @app.get("/api/city-model")
@@ -187,19 +487,87 @@ async def get_evacuation_plan():
 
 @app.get("/api/simulation-summary")
 async def get_simulation_summary():
-    from decision_governor.summary_generator import generate_summary
     log = decision_governor.get_simulation_log()
-    return generate_summary(log)
+    summary = await sg.generate_llm_summary(log)
+    
+    # Inject real events from simulation state
+    formatted_events = []
+    for ev in simulation_state["replan_events"]:
+        formatted_events.append({
+            "tick": ev.get("tick", 0),
+            "message": f"REPLAN: {ev.get('trigger_type', 'Manual')} for {ev.get('affected_zone_id', 'ALL')}"
+        })
+    
+    summary["events"] = formatted_events
+    return summary
+
+@app.get("/api/ollama-status")
+async def get_ollama_status():
+    """Returns the current Ollama connection status, models, and health."""
+    status = ollama_client.get_status()
+    status["available"] = await ollama_client.is_available()
+    status["models"] = await ollama_client.list_models()
+    return status
+
+@app.get("/api/llm-analysis/{zone_name}")
+async def get_llm_zone_analysis(zone_name: str):
+    """
+    On-demand LLM risk analysis for a specific zone.
+    Returns cached analysis if available, otherwise generates fresh.
+    """
+    # Check cached analysis first
+    if zone_name in _latest_llm_analysis:
+        return {
+            "zone_name": zone_name,
+            "analysis": _latest_llm_analysis[zone_name],
+            "source": "cached",
+        }
+
+    # Generate fresh analysis if Ollama is available
+    if not await ollama_client.is_available():
+        return {
+            "zone_name": zone_name,
+            "analysis": None,
+            "error": "Ollama not available",
+            "source": "unavailable",
+        }
+
+    # Get current risk scores
+    tick = simulation_state["tick"]
+    scenario = simulation_state["scenario"]
+    risk_scores = risk_agent.get_risk_scores(tick, scenario, city_model["zones"])
+
+    analysis = await risk_agent.get_llm_risk_analysis(
+        tick, scenario, city_model["zones"], risk_scores
+    )
+
+    zone_analysis = analysis.get(zone_name)
+    if zone_analysis:
+        return {
+            "zone_name": zone_name,
+            "analysis": zone_analysis,
+            "source": "fresh",
+        }
+
+    return {
+        "zone_name": zone_name,
+        "analysis": None,
+        "error": "Zone not found in analysis",
+        "source": "not_found",
+    }
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     clients.add(websocket)
     
-    # Send initial state on connect
+    # Send initial state on connect (include Ollama status)
     await websocket.send_text(json.dumps({
         "type": "STATE_SYNC",
-        "payload": {"simulation_state": simulation_state}
+        "payload": {
+            "simulation_state": simulation_state,
+            "ollama_status": ollama_client.get_status(),
+        }
     }))
     
     try:
@@ -213,6 +581,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 simulation_state["isRunning"] = True
             elif message["type"] == "STEP_SIMULATION":
                 simulation_state["manual_step"] = True
+            elif message["type"] == "EMERGENCY_REPLAN":
+                simulation_state["manual_replan_requested"] = True
+                logger.info("Manual EMERGENCY REPLAN requested via dashboard")
             elif message["type"] == "CHANGE_SCENARIO":
                 simulation_state["scenario"] = message.get("payload", "moderate_flood")
                 # Reset tick on scenario change
