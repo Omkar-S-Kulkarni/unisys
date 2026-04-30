@@ -185,12 +185,6 @@ export default function Navbar({ theme, setTheme, onSevereClick, analysisMode, s
               </div>
             )}
           </div>
-          <div className="relative">
-            <span className="text-surface-muted cursor-pointer hover:text-surface-foreground transition-colors text-base">
-              🔔
-            </span>
-            <span className="absolute -top-1 -right-1 w-2 h-2 bg-orange-500 border border-surface rounded-full shadow-[0_0_8px_rgba(251,146,60,0.4)]"></span>
-          </div>
         </div>
 
       </div>
