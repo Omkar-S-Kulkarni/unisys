@@ -45,6 +45,8 @@ const getZoneIcon = (risk) => {
   let color = '#aaffdc'; // Stable (Emerald)
   let shadow = '#aaffdc';
   
+  const isLight = document.documentElement.classList.contains('light');
+
   if (risk >= 9) {
     color = '#ef4444'; // Red
     shadow = '#ef4444';
@@ -54,6 +56,9 @@ const getZoneIcon = (risk) => {
   } else if (risk >= 5) {
     color = '#eab308'; // Yellow
     shadow = '#eab308';
+  } else {
+    color = isLight ? '#059669' : '#aaffdc'; // Darker emerald in light mode
+    shadow = color;
   }
 
   return L.divIcon({
@@ -362,35 +367,35 @@ export default function RoutePlan() {
   return (
     <div className="flex flex-col h-full space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-800 pb-2">
+      <div className="flex items-center justify-between border-b border-surface-border pb-2">
         <div className="flex items-center gap-4">
           <span className="text-xs font-bold text-primary tracking-[0.2em] uppercase">
             Route Plan Simulation
           </span>
-          <div className="h-4 w-px bg-gray-800"></div>
-          <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">
+          <div className="h-4 w-px bg-surface-border"></div>
+          <span className="text-[10px] font-mono text-surface-muted uppercase tracking-widest">
             Mobility_Agent_V.1.2 // Live_Tick: {tick}
           </span>
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-            <span className="text-[10px] text-gray-400 uppercase font-bold">Mobilization Alpha</span>
+            <span className="text-[10px] text-surface-muted uppercase font-bold">Mobilization Alpha</span>
           </div>
-          <div className="text-[10px] font-mono text-gray-500 tracking-widest uppercase">
+          <div className="text-[10px] font-mono text-surface-muted tracking-widest uppercase">
             CartoDB geo overlays
           </div>
         </div>
       </div>
 
-      <div className="flex flex-1 relative overflow-hidden rounded-lg border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+      <div className="flex flex-1 relative overflow-hidden rounded-lg border border-surface-border shadow-[0_0_50px_rgba(0,0,0,0.5)]">
         {/* Real Map Area */}
         <div className="absolute inset-0 z-0">
           <style>
             {`
-              .leaflet-container { background: #0b0b0d; font-family: inherit; }
-              .custom-popup .leaflet-popup-content-wrapper { background: rgba(15, 15, 20, 0.9); backdrop-filter: blur(8px); color: #fff; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 4px; }
-              .custom-popup .leaflet-popup-tip { background: rgba(15, 15, 20, 0.9); }
+              .leaflet-container { background: var(--surface); font-family: inherit; }
+              .custom-popup .leaflet-popup-content-wrapper { background: var(--surface-panel); backdrop-filter: blur(8px); color: var(--surface-foreground); border: 1px solid var(--surface-border); border-radius: 4px; }
+              .custom-popup .leaflet-popup-tip { background: var(--surface-panel); }
               @keyframes dash { to { stroke-dashoffset: -20; } }
               .best-path-glow { filter: drop-shadow(0 0 8px #aaffdc); animation: dash 1s linear infinite; }
             `}
@@ -406,7 +411,9 @@ export default function RoutePlan() {
 
             <TileLayer
               attribution='&copy; CARTO'
-              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+              url={document.documentElement.classList.contains('light') 
+                ? "https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png"
+                : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"}
             />
 
             {!selectedDetailZone && memoizedEdges.map((pathGeo, i) => (
@@ -420,7 +427,7 @@ export default function RoutePlan() {
                   {isTopRoute && <Polyline positions={route.geoPath} color="#aaffdc" weight={8} opacity={0.3} />}
                   <Polyline
                     positions={route.geoPath}
-                    color={route.status === 'ok' ? '#aaffdc' : '#ff716c'}
+                    color={route.status === 'ok' ? (isLight ? '#2563eb' : '#aaffdc') : '#ff716c'}
                     weight={route.rank === 1 ? 5 : 3}
                     opacity={route.rank === 1 ? 0.95 : 0.55}
                     dashArray={route.rank === 1 ? "10, 10" : "none"}
@@ -451,7 +458,7 @@ export default function RoutePlan() {
                   <Popup className="custom-popup">
                     <div className="p-1">
                       <div className="text-[10px] font-black text-primary uppercase">{liveZone?.name || id}</div>
-                      <div className="text-[8px] text-gray-400 font-mono">RISK: {risk.toFixed(1)}</div>
+                      <div className="text-[8px] text-surface-muted font-mono">RISK: {risk.toFixed(1)}</div>
                     </div>
                   </Popup>
                 </Marker>
@@ -474,7 +481,7 @@ export default function RoutePlan() {
             {cityData.shelters.map(shelter => (
               <Marker key={shelter.id} position={SHELTER_COORDS[shelter.id]} icon={shelterIcon}>
                 <Popup className="custom-popup">
-                  <div className="p-1 text-[10px] text-white uppercase font-black">SHELTER: {shelter.name}</div>
+                  <div className="p-1 text-[10px] text-surface-foreground uppercase font-black">SHELTER: {shelter.name}</div>
                 </Popup>
               </Marker>
             ))}
@@ -488,19 +495,19 @@ export default function RoutePlan() {
         {/* Left Sidebar - Tactical Detail Selection */}
         <div className="absolute top-6 left-6 w-64 z-[1000] flex flex-col pointer-events-none gap-4">
             <div className="flex flex-col gap-1">
-              <span className="text-[12px] font-black text-black tracking-[0.4em] uppercase bg-primary px-2 py-0.5 shadow-lg w-fit">BENGALURU_METRO</span>
-              <span className="text-[8px] font-mono text-primary bg-black/80 px-2 py-0.5 tracking-[0.2em] uppercase w-fit">Geo_Tactical_Overlay</span>
+              <span className="text-[12px] font-black text-white dark:text-black tracking-[0.4em] uppercase bg-primary px-2 py-0.5 shadow-lg w-fit">BENGALURU_METRO</span>
+              <span className="text-[8px] font-mono text-primary bg-surface-navbar px-2 py-0.5 tracking-[0.2em] uppercase w-fit">Geo_Tactical_Overlay</span>
             </div>
 
-            <div className="bg-black/70 backdrop-blur-xl border border-white/10 p-4 rounded-lg shadow-2xl pointer-events-auto space-y-4">
-              <h3 className="text-[10px] font-black text-primary tracking-widest uppercase border-b border-white/10 pb-1">Tactical_Drill_Down</h3>
+            <div className="bg-surface-navbar backdrop-blur-xl border border-surface-border p-4 rounded-lg shadow-2xl pointer-events-auto space-y-4">
+              <h3 className="text-[10px] font-black text-primary tracking-widest uppercase border-b border-surface-border pb-1">Tactical_Drill_Down</h3>
               <div className="space-y-2">
                 <div className="grid grid-cols-2 gap-2">
                   {['Z01', 'Z02', 'Z03', 'Z04', 'Z05', 'Z06', 'Z07', 'Z08', 'Z09', 'Z10', 'Z11', 'Z12'].map(id => (
                     <button
                       key={id}
                       onClick={() => setSelectedDetailZone(selectedDetailZone === id ? null : id)}
-                      className={`text-left p-1.5 border transition-all rounded text-[9px] font-bold uppercase ${selectedDetailZone === id ? 'bg-primary/20 border-primary shadow-[0_0_10px_rgba(170,255,220,0.2)] text-white' : 'bg-white/5 border-white/5 hover:border-white/20 text-gray-400'}`}
+                      className={`text-left p-1.5 border transition-all rounded text-[9px] font-bold uppercase ${selectedDetailZone === id ? 'bg-primary/20 border-primary shadow-[0_0_10px_rgba(170,255,220,0.2)] text-surface-foreground' : 'bg-surface-muted border-surface-border hover:border-primary/50 text-surface-muted'}`}
                     >
                       {id} Detail
                     </button>
@@ -510,15 +517,15 @@ export default function RoutePlan() {
 
               {selectedDetailZone && (
                 <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
-                  <div className="bg-white/5 p-3 rounded border border-white/10 space-y-1">
-                    <div className="flex justify-between text-[9px]"><span className="text-gray-400 uppercase">Areas Identified</span><span className="text-white font-mono">{detailGeoData?.features?.length || '...'}</span></div>
-                    <div className="flex justify-between text-[9px]"><span className="text-gray-400 uppercase">Risk Level</span><span className="text-red-400 font-bold">CRITICAL_OVERLAY</span></div>
+                  <div className="bg-surface-muted p-3 rounded border border-surface-border space-y-1">
+                    <div className="flex justify-between text-[9px]"><span className="text-surface-muted uppercase">Areas Identified</span><span className="text-surface-foreground font-mono">{detailGeoData?.features?.length || '...'}</span></div>
+                    <div className="flex justify-between text-[9px]"><span className="text-surface-muted uppercase">Risk Level</span><span className="text-red-400 font-bold">CRITICAL_OVERLAY</span></div>
                     <button onClick={() => setSelectedDetailZone(null)} className="w-full mt-2 py-1 bg-red-500/20 text-red-400 border border-red-500/40 text-[8px] uppercase font-black hover:bg-red-500/40 transition-all">EXIT_DRILL_DOWN</button>
                   </div>
 
                   {detailGeoData && (
-                    <div className="bg-black/40 p-2 rounded border border-white/5 space-y-2">
-                      <span className="text-[7px] font-black text-gray-500 uppercase tracking-widest">Critical_Alert_Feed</span>
+                    <div className="bg-surface-panel p-2 rounded border border-surface-border space-y-2">
+                      <span className="text-[7px] font-black text-surface-muted uppercase tracking-widest">Critical_Alert_Feed</span>
                       <div className="space-y-1.5">
                         {detailGeoData.features
                           .map(f => ({ name: f.properties.name || "Unknown", risk: getSubAreaRisk(f) }))
@@ -526,7 +533,7 @@ export default function RoutePlan() {
                           .slice(0, 5)
                           .map((f, i) => (
                             <div key={i} className="flex items-center justify-between text-[8px] border-l-2 border-red-500 pl-2 py-0.5 bg-red-500/5">
-                              <span className="text-gray-300 truncate w-32">{f.name}</span>
+                              <span className="text-surface-muted truncate w-32">{f.name}</span>
                               <span className="text-red-500 font-bold">ALERT</span>
                             </div>
                           ))
@@ -541,31 +548,31 @@ export default function RoutePlan() {
 
         {/* Right Sidebar - Info Panel Overlay */}
         <div className="absolute top-6 right-6 w-80 z-[1000] flex flex-col pointer-events-none">
-          <div className="bg-black/60 backdrop-blur-xl border border-white/10 p-4 space-y-4 flex flex-col shadow-2xl pointer-events-auto rounded-lg overflow-hidden">
-            <div className="flex items-center justify-between border-b border-white/10 pb-2">
+          <div className="bg-surface-navbar backdrop-blur-xl border border-surface-border p-4 space-y-4 flex flex-col shadow-2xl pointer-events-auto rounded-lg overflow-hidden">
+            <div className="flex items-center justify-between border-b border-surface-border pb-2">
               <h3 className="text-[10px] font-black text-primary tracking-widest uppercase">Tactical_Relocation</h3>
               <span className="text-[8px] font-mono text-emerald-500 animate-pulse">● SIGNAL_OK</span>
             </div>
 
             <div className="flex-1 space-y-3 overflow-y-auto no-scrollbar max-h-80">
               {activeRoutes.length > 0 ? activeRoutes.map((route, i) => (
-                <div key={i} className="group relative p-3 bg-white/5 border border-white/5 hover:border-primary/40 transition-all rounded-sm">
+                <div key={i} className="group relative p-3 bg-surface-muted border border-surface-border hover:border-primary/40 transition-all rounded-sm">
                   <div className="absolute top-0 left-0 w-0.5 h-full bg-primary/20 group-hover:bg-primary transition-all"></div>
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex flex-col">
-                      <span className="text-[7px] text-gray-500 uppercase font-black tracking-widest">Vector</span>
-                      <span className="text-[10px] font-bold text-gray-100">{route.from} ➔ {route.to.slice(0, 3)}</span>
+                      <span className="text-[7px] text-surface-muted uppercase font-black tracking-widest">Vector</span>
+                      <span className="text-[10px] font-bold text-surface-foreground">{route.from} ➔ {route.to.slice(0, 3)}</span>
                     </div>
                     <div className="flex flex-col items-end">
-                      <span className="text-[7px] text-gray-500 uppercase font-black tracking-widest">Status</span>
+                      <span className="text-[7px] text-surface-muted uppercase font-black tracking-widest">Status</span>
                       <span className={`text-[9px] font-black ${route.status === 'ok' ? 'text-emerald-400' : 'text-orange-400'}`}>
                         {route.status.toUpperCase()}
                       </span>
                     </div>
                   </div>
                   <div className="flex items-end justify-between">
-                    <div className="text-lg font-mono font-black text-white leading-none">
-                      {route.humans} <span className="text-[8px] text-gray-500 font-normal">SOULS</span>
+                    <div className="text-lg font-mono font-black text-surface-foreground leading-none">
+                      {route.humans} <span className="text-[8px] text-surface-muted font-normal">SOULS</span>
                     </div>
                     <div className="w-16 h-1 bg-white/10 rounded-full overflow-hidden">
                       <div className="h-full bg-primary" style={{ width: '70%' }}></div>
@@ -577,18 +584,18 @@ export default function RoutePlan() {
               )}
             </div>
 
-            <div className="pt-4 border-t border-white/10 space-y-3">
-              <div className="flex justify-between items-center text-[8px] text-white/40 font-black uppercase tracking-[0.2em]">
+            <div className="pt-4 border-t border-surface-border space-y-3">
+              <div className="flex justify-between items-center text-[8px] text-surface-muted font-black uppercase tracking-[0.2em]">
                 <span>Node_Sync_Lat</span>
                 <span className="text-primary">12.4ms</span>
               </div>
               <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
-                <div className="bg-white/5 p-2 rounded-sm border border-white/5 flex flex-col">
-                  <span className="text-gray-500 text-[7px] font-bold">REPLAN</span>
-                  <span className="text-white text-[9px]">AUTOMATIC</span>
+                <div className="bg-surface-muted p-2 rounded-sm border border-surface-border flex flex-col">
+                  <span className="text-surface-muted text-[7px] font-bold">REPLAN</span>
+                  <span className="text-surface-foreground text-[9px]">AUTOMATIC</span>
                 </div>
-                <div className="bg-white/5 p-2 rounded-sm border border-white/5 flex flex-col">
-                  <span className="text-gray-500 text-[7px] font-bold">MODE</span>
+                <div className="bg-surface-muted p-2 rounded-sm border border-surface-border flex flex-col">
+                  <span className="text-surface-muted text-[7px] font-bold">MODE</span>
                   <span className="text-emerald-400 text-[9px]">TACTICAL</span>
                 </div>
               </div>

@@ -28,16 +28,16 @@ export default function AnalysisPanel({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-y-0 right-0 w-[450px] bg-[#0c0c0e]/95 backdrop-blur-2xl border-l border-gray-800 z-[60] shadow-[-20px_0_50px_rgba(0,0,0,0.5)] flex flex-col transition-all animate-in slide-in-from-right duration-500">
+    <div className="fixed inset-y-0 right-0 w-[450px] bg-surface-navbar backdrop-blur-2xl border-l border-surface-border z-[60] shadow-[-20px_0_50px_rgba(0,0,0,0.5)] flex flex-col transition-all animate-in slide-in-from-right duration-500">
       {/* Header */}
-      <div className="p-6 border-b border-gray-800 flex items-center justify-between bg-surface/50">
+      <div className="p-6 border-b border-surface-border flex items-center justify-between bg-surface-muted/50">
         <div>
-          <h2 className="text-sm font-black text-white tracking-[0.2em] uppercase">Intelligence Analysis</h2>
-          <p className="text-[9px] text-gray-500 font-mono mt-1">REAL-TIME_EVENT_LOGGING_STREAM</p>
+          <h2 className="text-sm font-black text-surface-foreground tracking-[0.2em] uppercase">Intelligence Analysis</h2>
+          <p className="text-[9px] text-surface-muted font-mono mt-1">REAL-TIME_EVENT_LOGGING_STREAM</p>
         </div>
         <button 
           onClick={onClose}
-          className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-white transition-colors"
+          className="w-8 h-8 flex items-center justify-center text-surface-muted hover:text-surface-foreground transition-colors"
         >
           ✕
         </button>
@@ -54,12 +54,12 @@ export default function AnalysisPanel({ isOpen, onClose }) {
           <>
             {/* Quick Metrics */}
             <div className="grid grid-cols-2 gap-4">
-              <div className="bg-white/5 border border-white/10 p-4 rounded-lg">
-                <div className="text-[9px] text-gray-500 uppercase font-bold mb-1">Replans</div>
+              <div className="bg-surface-muted border border-surface-border p-4 rounded-lg">
+                <div className="text-[9px] text-surface-muted uppercase font-bold mb-1">Replans</div>
                 <div className="text-2xl font-black text-orange-400 font-mono">{summary?.metrics?.replan_count || 0}</div>
               </div>
-              <div className="bg-white/5 border border-white/10 p-4 rounded-lg">
-                <div className="text-[9px] text-gray-500 uppercase font-bold mb-1">Total Ticks</div>
+              <div className="bg-surface-muted border border-surface-border p-4 rounded-lg">
+                <div className="text-[9px] text-surface-muted uppercase font-bold mb-1">Total Ticks</div>
                 <div className="text-2xl font-black text-emerald-400 font-mono">{summary?.metrics?.total_ticks || 0}</div>
               </div>
             </div>
@@ -71,7 +71,7 @@ export default function AnalysisPanel({ isOpen, onClose }) {
                  System Insight Summary
                </h3>
                <div className="bg-indigo-500/5 border border-indigo-500/20 p-4 rounded-xl relative overflow-hidden">
-                  <div className="text-[11px] text-gray-300 leading-relaxed font-serif italic">
+                  <div className="text-[11px] text-surface-foreground leading-relaxed font-serif italic">
                     {summary?.summary || "Analyzing current simulation state for strategic patterns..."}
                   </div>
                   <div className="absolute bottom-0 right-0 opacity-10 text-[40px] font-black -mb-2 -mr-2 text-indigo-500 select-none">AI</div>
@@ -80,23 +80,23 @@ export default function AnalysisPanel({ isOpen, onClose }) {
 
             {/* Events Timeline */}
             <div className="space-y-4">
-               <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Decision Timeline</h3>
-               <div className="space-y-4 relative before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-px before:bg-gray-800">
+               <h3 className="text-[10px] font-bold text-surface-muted uppercase tracking-widest">Decision Timeline</h3>
+               <div className="space-y-4 relative before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-px before:bg-surface-border">
                   {summary?.events?.length > 0 ? summary.events.slice().reverse().map((ev, i) => (
                     <div key={i} className="relative pl-6">
-                      <div className="absolute left-0 top-1.5 w-3.5 h-3.5 rounded-full bg-[#0c0c0e] border border-gray-700 flex items-center justify-center">
+                      <div className="absolute left-0 top-1.5 w-3.5 h-3.5 rounded-full bg-surface border border-surface-border flex items-center justify-center">
                         <div className="w-1.5 h-1.5 rounded-full bg-primary/40"></div>
                       </div>
                       <div className="flex justify-between items-start mb-1">
-                        <span className="text-[9px] font-mono text-gray-600">TICK {ev.tick}</span>
-                        <span className="text-[8px] px-1.5 py-0.5 bg-gray-800 text-gray-400 rounded uppercase font-bold">Event</span>
+                        <span className="text-[9px] font-mono text-surface-muted">TICK {ev.tick}</span>
+                        <span className="text-[8px] px-1.5 py-0.5 bg-surface-muted text-surface-muted rounded uppercase font-bold">Event</span>
                       </div>
-                      <p className="text-[10px] text-gray-300 font-medium leading-tight">
+                      <p className="text-[10px] text-surface-foreground font-medium leading-tight">
                         {ev.message}
                       </p>
                     </div>
                   )) : (
-                    <div className="text-[10px] text-gray-600 italic pl-6">No strategic events recorded yet.</div>
+                    <div className="text-[10px] text-surface-muted italic pl-6">No strategic events recorded yet.</div>
                   )}
                </div>
             </div>
@@ -104,7 +104,7 @@ export default function AnalysisPanel({ isOpen, onClose }) {
             {/* Recommendations */}
             <div className="bg-emerald-500/5 border border-emerald-500/20 p-5 rounded-xl">
                <h3 className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-2">Tactical Guidance</h3>
-               <p className="text-[11px] text-gray-400 leading-relaxed">
+               <p className="text-[11px] text-surface-muted leading-relaxed">
                  {summary?.recommendation || "Maintain current operational parameters until further data validation."}
                </p>
             </div>
@@ -113,7 +113,7 @@ export default function AnalysisPanel({ isOpen, onClose }) {
       </div>
 
       {/* Footer Actions */}
-      <div className="p-6 border-t border-gray-800 bg-surface/30">
+      <div className="p-6 border-t border-surface-border bg-surface-muted/30">
         <button 
           onClick={fetchSummary}
           className="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black py-3 rounded-lg uppercase tracking-widest transition-all active:scale-[0.98] shadow-[0_10px_20px_rgba(79,70,229,0.2)]"

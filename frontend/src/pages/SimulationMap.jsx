@@ -28,10 +28,11 @@ const SHELTER_COORDS = {
 const getLatLng = (id) => GEO_COORDS[id] || SHELTER_COORDS[id] || [12.9716, 77.6411];
 
 const getZoneIcon = (risk, evacuated) => {
-    const color = evacuated ? '#555' : risk >= 9 ? '#ef4444' : risk >= 7 ? '#f97316' : risk >= 5 ? '#eab308' : '#aaffdc';
+    const isLight = document.documentElement.classList.contains('light');
+    const color = evacuated ? '#555' : risk >= 9 ? '#ef4444' : risk >= 7 ? '#f97316' : risk >= 5 ? '#eab308' : (isLight ? '#059669' : '#aaffdc');
     return L.divIcon({
         className: 'custom-zone-icon',
-        html: `<div style="width: 14px; height: 14px; background-color: ${color}; border-radius: 50%; border: 2px solid #111; box-shadow: 0 0 10px ${color};"></div>`,
+        html: `<div style="width: 14px; height: 14px; background-color: ${color}; border-radius: 50%; border: 2px solid ${isLight ? '#fff' : '#111'}; box-shadow: 0 0 10px ${color};"></div>`,
         iconSize: [14, 14],
         iconAnchor: [7, 7],
     });
@@ -175,36 +176,36 @@ export default function SimulationMap() {
 
     return (
         <div className="flex flex-col h-screen w-full space-y-4 overflow-hidden">
-            <div className="flex items-center justify-between border-b border-gray-800 pb-2 px-4 pt-4">
+            <div className="flex items-center justify-between border-b border-surface-border pb-2 px-4 pt-4">
                 <div className="flex flex-col gap-1">
                     <span className="text-xs font-bold text-primary uppercase tracking-[0.2em]">Evacuation Simulation</span>
-                    <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest">Live tick: {data?.tick ?? 0}</span>
+                    <span className="text-[10px] text-surface-muted font-mono uppercase tracking-widest">Live tick: {data?.tick ?? 0}</span>
                 </div>
                 <div className="grid grid-cols-3 gap-4 text-center">
-                    <div className="bg-surface border border-gray-800 p-3 rounded-xl">
-                        <div className="text-[10px] text-gray-400 uppercase tracking-[0.2em]">Zones evacuated</div>
-                        <div className="text-3xl font-black text-white">{evacuatedZones.length}</div>
+                    <div className="bg-surface-panel border border-surface-border p-3 rounded-xl">
+                        <div className="text-[10px] text-surface-muted uppercase tracking-[0.2em]">Zones evacuated</div>
+                        <div className="text-3xl font-black text-surface-foreground">{evacuatedZones.length}</div>
                     </div>
-                    <div className="bg-surface border border-gray-800 p-3 rounded-xl">
-                        <div className="text-[10px] text-gray-400 uppercase tracking-[0.2em]">Active paths</div>
-                        <div className="text-3xl font-black text-white">{currentOrder ? 1 : 0}</div>
+                    <div className="bg-surface-panel border border-surface-border p-3 rounded-xl">
+                        <div className="text-[10px] text-surface-muted uppercase tracking-[0.2em]">Active paths</div>
+                        <div className="text-3xl font-black text-surface-foreground">{currentOrder ? 1 : 0}</div>
                     </div>
-                    <div className="bg-surface border border-gray-800 p-3 rounded-xl">
-                        <div className="text-[10px] text-gray-400 uppercase tracking-[0.2em]">Shelters full</div>
-                        <div className="text-3xl font-black text-white">{fullShelters.length}</div>
+                    <div className="bg-surface-panel border border-surface-border p-3 rounded-xl">
+                        <div className="text-[10px] text-surface-muted uppercase tracking-[0.2em]">Shelters full</div>
+                        <div className="text-3xl font-black text-surface-foreground">{fullShelters.length}</div>
                     </div>
                 </div>
             </div>
 
             {notification && (
-                <div className="fixed right-6 top-24 z-50 max-w-xs rounded-2xl border border-surface-border bg-surface p-4 text-sm shadow-[0_20px_80px_rgba(0,0,0,0.35)]">
+                <div className="fixed right-6 top-24 z-50 max-w-xs rounded-2xl border border-surface-border bg-surface-panel p-4 text-sm shadow-[0_20px_80px_rgba(0,0,0,0.35)]">
                     <div className="text-xs font-bold text-primary uppercase tracking-[0.2em] mb-2">Alert</div>
-                    <div className="text-gray-100">{notification}</div>
+                    <div className="text-surface-foreground">{notification}</div>
                 </div>
             )}
 
             <div className="grid gap-4 xl:grid-cols-[0.7fr_0.3fr] flex-1 overflow-hidden px-4 pb-4">
-                <div className="rounded-3xl border border-white/10 overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.45)] relative h-full">
+                <div className="rounded-3xl border border-surface-border overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.45)] relative h-full">
                     <MapContainer
                         center={[12.9716, 77.6411]}
                         zoom={12}
@@ -212,8 +213,10 @@ export default function SimulationMap() {
                         style={{ height: '100%', width: '100%' }}
                         className="w-full h-full">
                         <TileLayer
-                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                            attribution='&copy; CARTO'
+                            url={document.documentElement.classList.contains('light') 
+                                ? "https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png"
+                                : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"}
                         />
 
                         {edges.map((edge, index) => {
@@ -242,7 +245,7 @@ export default function SimulationMap() {
                                 <React.Fragment key={`route-${order.zoneKey}`}>
                                     <Polyline
                                         positions={routePath}
-                                        color={isCurrent ? "#7dd3fc" : "#f97316"}
+                                        color={isCurrent ? (document.documentElement.classList.contains('light') ? "#2563eb" : "#7dd3fc") : "#f97316"}
                                         weight={isCurrent ? 4 : 3}
                                         opacity={isCurrent ? 0.85 : 0.6}
                                         dashArray={isCurrent ? "12, 8" : null}
@@ -309,13 +312,13 @@ export default function SimulationMap() {
                 </div>
 
                 <div className="space-y-4 overflow-y-auto">
-                    <div className="rounded-3xl border border-white/10 bg-[#09090d]/80 p-5 shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
+                    <div className="rounded-3xl border border-surface-border bg-surface-panel p-5 shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
                         <div className="flex items-center justify-between mb-4">
                             <div>
                                 <div className="text-xs font-bold text-primary uppercase tracking-[0.2em]">Top 3 Danger Zones</div>
-                                <div className="text-[10px] text-gray-500 uppercase tracking-[0.2em]">Live evacuation priorities</div>
+                                <div className="text-[10px] text-surface-muted uppercase tracking-[0.2em]">Live evacuation priorities</div>
                             </div>
-                            <div className="text-[10px] text-gray-400 uppercase tracking-[0.2em]">{data?.scenario || 'moderate_flood'}</div>
+                            <div className="text-[10px] text-surface-muted uppercase tracking-[0.2em]">{data?.scenario || 'moderate_flood'}</div>
                         </div>
                         <div className="space-y-3">
                             {remainingTop3.length === 0 ? (
@@ -327,15 +330,15 @@ export default function SimulationMap() {
                                     const effectiveShelterName = order.zoneKey === currentOrder?.zoneKey ? (effectiveShelter?.name || order.assigned_shelter) : order.assigned_shelter;
                                     const pathLength = currentRoutePath.length;
                                     return (
-                                        <div key={`top-${order.zoneKey}`} className={"rounded-3xl border p-4 " + (isCurrent ? "border-primary bg-[#14212a]/80" : "border-gray-800 bg-[#111117]/80")}>
+                                        <div key={`top-${order.zoneKey}`} className={"rounded-3xl border p-4 " + (isCurrent ? "border-primary bg-primary/10" : "border-surface-border bg-surface-muted")}>
                                             <div className="flex items-center justify-between gap-3">
                                                 <div>
-                                                    <div className="text-sm font-black text-white">{zone?.name || order.zoneName}</div>
-                                                    <div className="text-[10px] uppercase tracking-[0.2em] text-gray-500">Shelter {effectiveShelterName}</div>
+                                                    <div className="text-sm font-black text-surface-foreground">{zone?.name || order.zoneName}</div>
+                                                    <div className="text-[10px] uppercase tracking-[0.2em] text-surface-muted">Shelter {effectiveShelterName}</div>
                                                 </div>
-                                                <div className="text-2xl font-black text-white">#{order.rank}</div>
+                                                <div className="text-2xl font-black text-surface-foreground">#{order.rank}</div>
                                             </div>
-                                            <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-gray-400">
+                                            <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-surface-muted">
                                                 <div>Risk: {order.risk_score?.toFixed(1)}</div>
                                                 <div>Batch: {order.humans}</div>
                                                 <div>Path length: {isCurrent ? pathLength : order.route?.path?.length || 0}</div>
@@ -348,17 +351,17 @@ export default function SimulationMap() {
                         </div>
                     </div>
 
-                    <div className="rounded-3xl border border-white/10 bg-[#09090d]/80 p-5 shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
+                    <div className="rounded-3xl border border-surface-border bg-surface-panel p-5 shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
                         <div className="text-xs font-bold text-primary uppercase tracking-[0.2em] mb-4">Shelter Load Summary</div>
                         <div className="space-y-3">
                             {shelterList.map((shelter) => {
                                 const percentage = Math.min(Math.round(shelter.load_pct), 100);
                                 return (
-                                    <div key={`summary-${shelter.id}`} className="rounded-3xl border border-gray-800 p-4 bg-[#101017]/80">
+                                    <div key={`summary-${shelter.id}`} className="rounded-3xl border border-surface-border p-4 bg-surface-muted">
                                         <div className="flex items-center justify-between">
                                             <div>
-                                                <div className="text-sm font-bold text-white">{shelter.name}</div>
-                                                <div className="text-[10px] uppercase tracking-[0.2em] text-gray-500">{shelter.available_capacity <= 0 ? 'FULL' : `${shelter.available_capacity} seats left`}</div>
+                                                <div className="text-sm font-bold text-surface-foreground">{shelter.name}</div>
+                                                <div className="text-[10px] uppercase tracking-[0.2em] text-surface-muted">{shelter.available_capacity <= 0 ? 'FULL' : `${shelter.available_capacity} seats left`}</div>
                                             </div>
                                             <div className={`text-xs font-black ${percentage >= 100 ? 'text-red-500' : 'text-emerald-400'}`}>{percentage}%</div>
                                         </div>
