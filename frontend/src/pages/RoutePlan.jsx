@@ -1,20 +1,20 @@
-// ... imports remain the same
 import React, { useState, useEffect } from 'react';
 import cityData from '../data/city-model.json';
 import { useGlobalSocket } from '../context/SocketContext';
-import { MapContainer, TileLayer, Marker, Polyline, Popup } from 'react-leaflet';
+import { useLocation } from 'react-router-dom';
+import { MapContainer, TileLayer, Marker, Polyline, Popup, GeoJSON } from 'react-leaflet';
 import L from 'leaflet';
 
 // Real Bengaluru Latitude/Longitude approximations
 const GEO_COORDS = {
-  Z01: [12.9698, 77.7499], // Whitefield
-  Z02: [12.9279, 77.6271], // Koramangala
+  Z01: [12.9304, 77.6784], // Bellandur (Now Z01)
+  Z02: [12.9569, 77.7011], // Marathahalli (Now Z02)
   Z03: [12.9121, 77.6446], // HSR Layout
   Z04: [12.8601, 77.7850], // Sarjapur
   Z05: [12.9716, 77.6411], // Indiranagar
   Z06: [12.9880, 77.6690], // Mahadevapura
-  Z07: [12.9304, 77.6784], // Bellandur
-  Z08: [12.9569, 77.7011], // Marathahalli
+  Z07: [12.9698, 77.7499], // Whitefield
+  Z08: [12.9279, 77.6271], // Koramangala
   Z09: [12.9166, 77.6101], // BTM Layout
   Z10: [12.8399, 77.6770], // Electronic City
   Z11: [13.0354, 77.5988], // Hebbal
@@ -118,9 +118,14 @@ const EvacuationUnit = ({ path, delay = 0 }) => {
 
 export default function RoutePlan() {
   const { data, isConnected } = useGlobalSocket();
+  const location = useLocation();
   const [tick, setTick] = useState(0);
   const [activeRoutes, setActiveRoutes] = useState([]);
   const [map, setMap] = useState(null);
+  const [selectedDetailZone, setSelectedDetailZone] = useState(null);
+  const [detailGeoData, setDetailGeoData] = useState(null);
+  const [isLoadingGeo, setIsLoadingGeo] = useState(false);
+  const [showPipeline, setShowPipeline] = useState(false);
 
   const [osrmCache, setOsrmCache] = useState({});
 
@@ -156,19 +161,115 @@ export default function RoutePlan() {
     return edges.map(edge => renderOsrmPath(edge));
   }, [edges, renderOsrmPath]);
 
+  // Handle auto-selection from Pipeline
   useEffect(() => {
-    // Remove the hacky CSS filter
-    document.documentElement.style.removeProperty('--leaflet-tile-filter');
-  }, []);
+    if (location.state?.autoSelectZone) {
+      const zoneId = location.state.autoSelectZone;
+      setSelectedDetailZone(zoneId);
+      
+      // Auto-zoom to the zone
+      const coords = GEO_COORDS[zoneId] || GEO_COORDS[zoneId.toUpperCase()];
+      if (map && coords) {
+        map.flyTo(coords, 15);
+      }
 
-  // Force Leaflet to recalculate size when component mounts fully
-  useEffect(() => {
-    if (map) {
-      setTimeout(() => {
-        map.invalidateSize();
-      }, 500);
+      // Clear state to prevent re-triggering on refresh
+      window.history.replaceState({}, document.title);
     }
-  }, [map]);
+  }, [location, map]);
+
+  useEffect(() => {
+    if (!selectedDetailZone) {
+      setDetailGeoData(null);
+      return;
+    }
+
+    const zoneKey = selectedDetailZone.toLowerCase();
+    
+    // Fetch GeoJSON for specific high-fidelity zones
+    if (zoneKey.includes('bellandur') || zoneKey === 'z01') {
+      setIsLoadingGeo(true);
+      fetch('/src/data/bellanduru.geojson')
+        .then(res => res.json())
+        .then(data => {
+          setDetailGeoData(data);
+          setIsLoadingGeo(false);
+          const coords = GEO_COORDS.Z01 || GEO_COORDS.Bellandur;
+          if (map && coords) map.flyTo(coords, 15);
+        })
+        .catch(() => setIsLoadingGeo(false));
+    } else if (zoneKey.includes('marathahalli') || zoneKey === 'z02') {
+      setIsLoadingGeo(true);
+      fetch('/src/data/marathhalli.geojson')
+        .then(res => res.json())
+        .then(data => {
+          setDetailGeoData(data);
+          setIsLoadingGeo(false);
+          const coords = GEO_COORDS.Z02 || GEO_COORDS.Marathahalli;
+          if (map && coords) map.flyTo(coords, 15);
+        })
+        .catch(() => setIsLoadingGeo(false));
+    } else {
+      // General zoom for other zones (Z01-Z06, Z09-Z12)
+      setDetailGeoData(null);
+      const coords = GEO_COORDS[selectedDetailZone.toUpperCase()] || GEO_COORDS[selectedDetailZone];
+      if (map && coords) {
+        map.flyTo(coords, 15);
+      }
+    }
+  }, [selectedDetailZone, map]);
+
+  const getSubAreaRisk = (feature) => {
+    // Synthetic risk calculation for demo
+    // High risk for water bodies or specific names
+    const props = feature.properties || {};
+    const name = (props.name || "").toLowerCase();
+    if (props.natural === 'water' || props.water) return 10;
+    if (name.includes('slum') || name.includes('low')) return 9;
+    if (name.includes('apartment') || name.includes('residency')) return 4;
+    
+    // Default random-ish but stable risk based on ID
+    const idStr = props['@id'] || props.id || "0";
+    const hash = idStr.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a; }, 0);
+    return Math.abs(hash % 8) + 2;
+  };
+
+  const geoJsonStyle = (feature) => {
+    const risk = getSubAreaRisk(feature);
+    let color = '#aaffdc'; // Stable
+    if (risk >= 9) color = '#ef4444'; // Critical
+    else if (risk >= 7) color = '#f97316'; // High
+    else if (risk >= 5) color = '#eab308'; // Elevated
+
+    return {
+      fillColor: color,
+      weight: 1,
+      opacity: 0.8,
+      color: 'white',
+      fillOpacity: 0.4,
+    };
+  };
+
+  const onEachFeature = (feature, layer) => {
+    const props = feature.properties || {};
+    const name = props.name || "Unnamed Sub-area";
+    const risk = getSubAreaRisk(feature);
+    const riskLabel = risk >= 9 ? 'CRITICAL' : risk >= 7 ? 'HIGH' : risk >= 5 ? 'ELEVATED' : 'STABLE';
+    const riskColor = risk >= 9 ? 'text-red-500' : risk >= 7 ? 'text-orange-500' : risk >= 5 ? 'text-yellow-500' : 'text-emerald-400';
+
+    layer.bindPopup(`
+      <div style="font-family: inherit; padding: 4px;">
+        <div style="font-size: 10px; font-weight: 900; color: #aaffdc; text-transform: uppercase; margin-bottom: 4px;">Detailed Analysis</div>
+        <div style="font-size: 12px; font-weight: bold; color: white; margin-bottom: 2px;">${name}</div>
+        <div style="font-size: 10px; color: #94a3b8;">Type: ${props.natural || props.building || 'Area'}</div>
+        <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 6px 0;" />
+        <div style="display: flex; justify-between; align-items: center;">
+          <span style="font-size: 9px; font-weight: bold; color: #94a3b8; text-transform: uppercase;">Danger Level:</span>
+          <span style="font-size: 9px; font-weight: 900; margin-left: 8px; color: ${risk >= 9 ? '#ef4444' : risk >= 7 ? '#f97316' : risk >= 5 ? '#eab308' : '#10b981'}">${riskLabel} (${risk.toFixed(1)})</span>
+        </div>
+      </div>
+    `);
+  };
 
   useEffect(() => {
     if (data && data.tick !== undefined) {
@@ -283,37 +384,15 @@ export default function RoutePlan() {
       </div>
 
       <div className="flex flex-1 relative overflow-hidden rounded-lg border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
-        {/* Real Map Area - Full Screen Mode ("Only One") */}
+        {/* Real Map Area */}
         <div className="absolute inset-0 z-0">
           <style>
             {`
-              .leaflet-container {
-                background: #0b0b0d;
-                font-family: inherit;
-              }
-              .custom-popup .leaflet-popup-content-wrapper {
-                background: rgba(15, 15, 20, 0.9);
-                backdrop-filter: blur(8px);
-                color: #fff;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 4px;
-              }
-              .custom-popup .leaflet-popup-tip {
-                background: rgba(15, 15, 20, 0.9);
-              }
-              @keyframes dash {
-                to {
-                  stroke-dashoffset: -20;
-                }
-              }
-              .best-path-glow {
-                filter: drop-shadow(0 0 8px #aaffdc);
-                animation: dash 1s linear infinite;
-              }
-              .moving-chevron {
-                pointer-events: none;
-                z-index: 1000;
-              }
+              .leaflet-container { background: #0b0b0d; font-family: inherit; }
+              .custom-popup .leaflet-popup-content-wrapper { background: rgba(15, 15, 20, 0.9); backdrop-filter: blur(8px); color: #fff; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 4px; }
+              .custom-popup .leaflet-popup-tip { background: rgba(15, 15, 20, 0.9); }
+              @keyframes dash { to { stroke-dashoffset: -20; } }
+              .best-path-glow { filter: drop-shadow(0 0 8px #aaffdc); animation: dash 1s linear infinite; }
             `}
           </style>
 
@@ -326,147 +405,145 @@ export default function RoutePlan() {
             zoomControl={false}>
 
             <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+              attribution='&copy; CARTO'
               url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
             />
 
-            {/* Render Static Network Edges */}
-            {memoizedEdges.map((pathGeo, i) => {
-              if (!pathGeo || pathGeo.length < 2) return null;
-              return (
-                <Polyline
-                  key={`edge-${i}`}
-                  positions={pathGeo}
-                  color="#2a454d"
-                  weight={1.5}
-                  opacity={0.4}
-                  dashArray="5 5"
-                />
-              );
-            })}
+            {!selectedDetailZone && memoizedEdges.map((pathGeo, i) => (
+              <Polyline key={`edge-${i}`} positions={pathGeo} color="#2a454d" weight={1.5} opacity={0.4} dashArray="5 5" />
+            ))}
 
-            {/* Render Active Replanned Routes */}
-            {memoizedPaths.map((route, i) => {
-              const pathGeo = route.geoPath;
-              if (!pathGeo || pathGeo.length < 2) return null;
-
-              // Check if this is the "Best" (Top Priority) Path
+            {!selectedDetailZone && memoizedPaths.map((route, i) => {
               const isTopRoute = i === 0;
-
               return (
                 <React.Fragment key={`route-group-${i}`}>
-                  {/* Secondary glow layer for top route */}
-                  {isTopRoute && (
-                    <Polyline
-                      positions={pathGeo}
-                      color="#aaffdc"
-                      weight={8}
-                      opacity={0.3}
-                    />
-                  )}
-
+                  {isTopRoute && <Polyline positions={route.geoPath} color="#aaffdc" weight={8} opacity={0.3} />}
                   <Polyline
-                    positions={pathGeo}
+                    positions={route.geoPath}
                     color={route.status === 'ok' ? '#aaffdc' : '#ff716c'}
-                    weight={route.rank === 1 ? 5 : route.rank === 2 ? 4 : 3}
-                    opacity={route.rank === 1 ? 0.95 : route.rank === 2 ? 0.75 : 0.55}
+                    weight={route.rank === 1 ? 5 : 3}
+                    opacity={route.rank === 1 ? 0.95 : 0.55}
                     dashArray={route.rank === 1 ? "10, 10" : "none"}
                     className={route.rank === 1 ? "best-path-glow" : ""}
                   >
                     <Popup className="custom-popup">
                       <div className="p-1">
                         <div className="text-[10px] font-black text-primary uppercase">PRIORITY {route.rank} PATH</div>
-                        <div className="text-[8px] text-white/60 font-mono">ZONE: {route.from}</div>
-                        <div className="text-[8px] text-white/60 font-mono">RISK: {route.risk_score?.toFixed(1)}</div>
-                        <div className="text-[8px] text-white/60 font-mono">FLOW: {route.humans} HUMAN_UNITS</div>
+                        <div className="text-[8px] text-white/60 font-mono">ZONE: {route.from} | RISK: {route.risk_score?.toFixed(1)}</div>
                       </div>
                     </Popup>
                   </Polyline>
-
-                  {/* Animated Moving Dots along the highest-priority path */}
                   {route.rank === 1 && (
                     <>
-                      <EvacuationUnit path={pathGeo} delay={0} />
-                      <EvacuationUnit path={pathGeo} delay={1500} />
-                      <EvacuationUnit path={pathGeo} delay={3000} />
+                      <EvacuationUnit path={route.geoPath} delay={0} />
+                      <EvacuationUnit path={route.geoPath} delay={1500} />
                     </>
                   )}
                 </React.Fragment>
               );
             })}
 
-            {Object.entries(GEO_COORDS).filter(([k]) => k.startsWith('Z')).map(([id, coord]) => {
+            {!selectedDetailZone && Object.entries(GEO_COORDS).filter(([k]) => k.startsWith('Z')).map(([id, coord]) => {
               const liveZone = data?.city_model?.zones?.find(z => z.id === id);
-              const zoneName = liveZone?.name || id;
-              const isEvacuated = liveZone?.status === 'evacuated';
-              const risk = liveZone?.risk_score ?? liveZone?.flood_risk_base ?? 0;
-              
+              const risk = liveZone?.risk_score ?? 0;
               return (
-                <Marker key={id} position={coord} icon={getZoneIcon(risk)} opacity={isEvacuated ? 0.3 : 1}>
+                <Marker key={id} position={coord} icon={getZoneIcon(risk)}>
                   <Popup className="custom-popup">
                     <div className="p-1">
-                      <div className="text-[10px] font-black text-primary tracking-widest uppercase mb-1">
-                        {zoneName} {isEvacuated && "(EVACUATED)"}
-                      </div>
-                      <div className="text-[8px] text-gray-400 font-mono">
-                        REMAINING POP: {liveZone?.remaining_population?.toLocaleString() ?? liveZone?.population?.toLocaleString() ?? "N/A"}
-                      </div>
+                      <div className="text-[10px] font-black text-primary uppercase">{liveZone?.name || id}</div>
                       <div className="text-[8px] text-gray-400 font-mono">RISK: {risk.toFixed(1)}</div>
                     </div>
                   </Popup>
                 </Marker>
-              )
+              );
             })}
 
+            {/* In Drill Down Mode: Show only the active zone marker if no GeoJSON */}
+            {selectedDetailZone && !detailGeoData && (() => {
+              const markerPos = GEO_COORDS[selectedDetailZone] || 
+                                GEO_COORDS[selectedDetailZone.toUpperCase()] || 
+                                GEO_COORDS[selectedDetailZone.charAt(0).toUpperCase() + selectedDetailZone.slice(1).toLowerCase()];
+              return markerPos ? (
+                <Marker 
+                  position={markerPos} 
+                  icon={getZoneIcon(9)}
+                />
+              ) : null;
+            })()}
 
-            {/* Render Shelters (Markers) */}
-            {cityData.shelters.map(shelter => {
-              const coord = SHELTER_COORDS[shelter.id];
-              if (!coord) return null;
-              return (
-                <Marker key={shelter.id} position={coord} icon={shelterIcon}>
-                  <Popup className="custom-popup">
-                    <div className="p-1">
-                      <div className="text-[10px] font-black text-white tracking-widest uppercase mb-1">SHELTER: {shelter.name}</div>
-                      <div className="text-[8px] text-emerald-400 font-mono">CAPACITY: {shelter.capacity}</div>
-                    </div>
-                  </Popup>
-                </Marker>
-              )
-            })}
+            {cityData.shelters.map(shelter => (
+              <Marker key={shelter.id} position={SHELTER_COORDS[shelter.id]} icon={shelterIcon}>
+                <Popup className="custom-popup">
+                  <div className="p-1 text-[10px] text-white uppercase font-black">SHELTER: {shelter.name}</div>
+                </Popup>
+              </Marker>
+            ))}
 
+            {detailGeoData && (
+              <GeoJSON data={detailGeoData} style={geoJsonStyle} onEachFeature={onEachFeature} />
+            )}
           </MapContainer>
-
-          <div className="absolute bottom-6 left-6 flex flex-col gap-3 pointer-events-none z-[1000]">
-            <div className="flex flex-col gap-1">
-              <span className="text-[12px] font-black text-black tracking-[0.4em] uppercase bg-primary px-2 py-0.5 shadow-lg w-fit">BENGALURU_METRO</span>
-              <span className="text-[8px] font-mono text-primary bg-black/80 px-2 py-0.5 tracking-[0.2em] uppercase w-fit">Geo_Tactical_Overlay_Enabled</span>
-            </div>
-
-            <div className="bg-black/80 backdrop-blur-md border border-white/10 p-2.5 rounded flex flex-col gap-2 pointer-events-auto">
-               <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5 pb-1 mb-0.5">Risk Legend</span>
-               <div className="flex gap-4">
-                  {[
-                    { label: 'Critical', color: 'bg-[#ef4444]' },
-                    { label: 'High', color: 'bg-[#f97316]' },
-                    { label: 'Elevated', color: 'bg-[#eab308]' },
-                    { label: 'Stable', color: 'bg-[#aaffdc]' }
-                  ].map(item => (
-                    <div key={item.label} className="flex items-center gap-1.5">
-                      <div className={`w-2 h-2 rounded-full ${item.color} shadow-[0_0_5px_currentColor]`}></div>
-                      <span className="text-[7px] text-gray-400 uppercase font-bold tracking-tighter">{item.label}</span>
-                    </div>
-                  ))}
-               </div>
-            </div>
-          </div>
         </div>
 
-        {/* Info Panel Overlay - Floating Premium Glassmorphism */}
-        <div className="absolute top-6 right-6 w-80 z-[1000] max-h-[calc(100%-3rem)] flex flex-col pointer-events-none">
+        {/* Left Sidebar - Tactical Detail Selection */}
+        <div className="absolute top-6 left-6 w-64 z-[1000] flex flex-col pointer-events-none gap-4">
+            <div className="flex flex-col gap-1">
+              <span className="text-[12px] font-black text-black tracking-[0.4em] uppercase bg-primary px-2 py-0.5 shadow-lg w-fit">BENGALURU_METRO</span>
+              <span className="text-[8px] font-mono text-primary bg-black/80 px-2 py-0.5 tracking-[0.2em] uppercase w-fit">Geo_Tactical_Overlay</span>
+            </div>
+
+            <div className="bg-black/70 backdrop-blur-xl border border-white/10 p-4 rounded-lg shadow-2xl pointer-events-auto space-y-4">
+              <h3 className="text-[10px] font-black text-primary tracking-widest uppercase border-b border-white/10 pb-1">Tactical_Drill_Down</h3>
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  {['Z01', 'Z02', 'Z03', 'Z04', 'Z05', 'Z06', 'Z07', 'Z08', 'Z09', 'Z10', 'Z11', 'Z12'].map(id => (
+                    <button
+                      key={id}
+                      onClick={() => setSelectedDetailZone(selectedDetailZone === id ? null : id)}
+                      className={`text-left p-1.5 border transition-all rounded text-[9px] font-bold uppercase ${selectedDetailZone === id ? 'bg-primary/20 border-primary shadow-[0_0_10px_rgba(170,255,220,0.2)] text-white' : 'bg-white/5 border-white/5 hover:border-white/20 text-gray-400'}`}
+                    >
+                      {id} Detail
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {selectedDetailZone && (
+                <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+                  <div className="bg-white/5 p-3 rounded border border-white/10 space-y-1">
+                    <div className="flex justify-between text-[9px]"><span className="text-gray-400 uppercase">Areas Identified</span><span className="text-white font-mono">{detailGeoData?.features?.length || '...'}</span></div>
+                    <div className="flex justify-between text-[9px]"><span className="text-gray-400 uppercase">Risk Level</span><span className="text-red-400 font-bold">CRITICAL_OVERLAY</span></div>
+                    <button onClick={() => setSelectedDetailZone(null)} className="w-full mt-2 py-1 bg-red-500/20 text-red-400 border border-red-500/40 text-[8px] uppercase font-black hover:bg-red-500/40 transition-all">EXIT_DRILL_DOWN</button>
+                  </div>
+
+                  {detailGeoData && (
+                    <div className="bg-black/40 p-2 rounded border border-white/5 space-y-2">
+                      <span className="text-[7px] font-black text-gray-500 uppercase tracking-widest">Critical_Alert_Feed</span>
+                      <div className="space-y-1.5">
+                        {detailGeoData.features
+                          .map(f => ({ name: f.properties.name || "Unknown", risk: getSubAreaRisk(f) }))
+                          .filter(f => f.risk >= 9)
+                          .slice(0, 5)
+                          .map((f, i) => (
+                            <div key={i} className="flex items-center justify-between text-[8px] border-l-2 border-red-500 pl-2 py-0.5 bg-red-500/5">
+                              <span className="text-gray-300 truncate w-32">{f.name}</span>
+                              <span className="text-red-500 font-bold">ALERT</span>
+                            </div>
+                          ))
+                        }
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+        {/* Right Sidebar - Info Panel Overlay */}
+        <div className="absolute top-6 right-6 w-80 z-[1000] flex flex-col pointer-events-none">
           <div className="bg-black/60 backdrop-blur-xl border border-white/10 p-4 space-y-4 flex flex-col shadow-2xl pointer-events-auto rounded-lg overflow-hidden">
             <div className="flex items-center justify-between border-b border-white/10 pb-2">
-              <h3 className="text-[10px] font-black text-primary tracking-[0.2em] uppercase">Tactical_Relocation_Feed</h3>
+              <h3 className="text-[10px] font-black text-primary tracking-widest uppercase">Tactical_Relocation</h3>
               <span className="text-[8px] font-mono text-emerald-500 animate-pulse">● SIGNAL_OK</span>
             </div>
 

@@ -4,6 +4,7 @@ export default function Sidebar() {
   const location = useLocation();
 
   const navItems = [
+    { label: "Intelligence Pipeline", path: "/pipeline", icon: "hub" },
     { label: "Orchestration", path: "/", icon: "grid_view" },
     { label: "Route Plan", path: "/route-plan", icon: "map" },
     { label: "Simulation", path: "/simulation", icon: "compass" },
@@ -42,6 +43,7 @@ export default function Sidebar() {
                 }`}
             >
               <span className={`material-symbols-outlined text-[18px] ${isActive ? "text-black" : "text-gray-400 group-hover:text-primary"}`}>
+                {item.icon === "hub" && "⎇"}
                 {item.icon === "grid_view" && "⊞"}
                 {item.icon === "map" && "🗺️"}
                 {item.icon === "compass" && "🧭"}

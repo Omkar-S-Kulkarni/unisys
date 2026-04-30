@@ -8,8 +8,15 @@
 
 ### 🗺️ Immersive Tactical Dashboard
 - **Full-Screen Bangalore Map** — Leaflet-based map with CartoDB dark-mode topography.
+- **Tactical Drill-Down** — High-fidelity GeoJSON isolation maps for critical zones (Z01/Bellandur, Z02/Marathahalli).
 - **Kinetic Flow Indicators** — Animated directional chevrons (`>>>`) that track along actual OSRM street paths to show real-time evacuation movement.
 - **Optimal Route Highlighting** — Dynamic glowing paths for the highest-priority evacuation vectors.
+- **High-Visibility Simulation Popups** — Enhanced map popups with emerald-green tactical data for crystal-clear legibility.
+
+### 🧠 Data Intelligence Pipeline
+- **Ollama Neural Link** — Live terminal visualization of AI inference requests powered by Qwen2.5-Coder and Llama3.1.
+- **Zonal Stratification Grid** — Real-time 12-zone risk monitoring matrix with interactive navigation.
+- **Autonomous Preprocessing** — Real-time display of coordinate mapping, flood normalization, and heuristic weighting.
 - **Glassmorphic Tactical Overlays** — Futuristic UI panels for live status feeds, simulation ticks, and unit-flow monitoring.
 
 ### 🧠 Multi-Agent Intelligence
@@ -59,7 +66,7 @@ venv\Scripts\activate        # Windows
 # Install Python dependencies
 pip install -r requirements.txt
 
-# Start the API server
+# Start the API server (from the project root)
 uvicorn backend.main:app --reload
 ```
 The API will be available at **`http://localhost:8000`**.
@@ -92,6 +99,8 @@ ADEO_UIP17/
 │   ├── vulnerability_agent/
 │   │   └── vulnerability_agent.py   # Population vulnerability scoring
 │   ├── risk_agent.py                # Zone risk evaluation
+│   ├── ollama_client.py             # Local LLM integration bridge (Ollama)
+│   ├── safety_predictor.py          # ML-based safe score predictions
 │   └── decision_governor.py         # High-level agent coordination
 │
 ├── decision_governor/
@@ -103,10 +112,13 @@ ADEO_UIP17/
 ├── frontend/
 │   ├── src/
 │   │   ├── pages/
-│   │   │   ├── RoutePlan.jsx        # Primary tactical map controller
+│   │   │   ├── IntelligencePipeline.jsx # Core data ingestion and AI inference terminal
+│   │   │   ├── RoutePlan.jsx        # Primary tactical map controller & drill-down
 │   │   │   ├── Orchestration.jsx    # Multi-agent orchestration view
 │   │   │   ├── ZonalAnalysis.jsx    # Zone-level analysis dashboard
 │   │   │   ├── ShelterStatus.jsx    # Shelter capacity & status monitor
+│   │   │   ├── SimulationMap.jsx    # Real-time evacuation simulation view
+│   │   │   ├── PostAnalysis.jsx     # Post-event review and metrics
 │   │   │   └── ReplanLog.jsx        # Re-planning event log
 │   │   ├── components/
 │   │   │   ├── Navbar.jsx           # Top navigation bar

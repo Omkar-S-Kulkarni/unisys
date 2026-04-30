@@ -452,13 +452,15 @@ async def simulation_loop():
                     steps += 1
                     simulation_state["zone_evacuation_steps"][z_name] = steps
                     
-                    # Batch size: 100, 200, 250, 300... as requested
-                    # Batch size: Starting at 5000 and increasing rapidly for large populations
-                    # Batch size: Incremental to show progress
-                    if steps == 1: batch_size = 5000
-                    elif steps == 2: batch_size = 10000
-                    elif steps == 3: batch_size = 15000
-                    else: batch_size = 20000 + (steps - 4) * 5000
+                    # Batch size: 100, 200, 250, 300... so shelters fill gradually
+                    if steps == 1:
+                        batch_size = 100
+                    elif steps == 2:
+                        batch_size = 200
+                    elif steps == 3:
+                        batch_size = 250
+                    else:
+                        batch_size = 300 + (steps - 4) * 50
                     
                     total_pop = zone_lookup.get(z_name, {}).get("population", 0)
                     already_evac = simulation_state["evacuated_population"].get(z_name, 0)
@@ -595,6 +597,7 @@ async def simulation_loop():
                         "zone_id": zs["id"],
                         "zone_name": zs["name"],
                         "risk_score": zs["risk_score"],
+                        "safety_score_ai": risk_agent.get_structured_output().get(zs["name"], {}).get("safety_score_ai", 10.0 - zs["risk_score"]),
                         "vulnerability_score": zs["vulnerability_score"],
                         "priority_tier": zs.get("priority_tier", "Low"),
                         "elderly_pct": zs.get("elderly_pct", 0),
@@ -810,11 +813,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 for entry in last_plan.get("evacuation_sequence", []):
                     z_name = entry.get("zone_name")
                     risk = entry.get("risk_score", 0.0)
-                    # Safety score is 10 - risk score
-                    safety_score = round(10.0 - risk, 1)
+                    # Safety score from AI model (Phase 6)
+                    structured_risk = risk_agent.get_structured_output().get(z_name, {})
+                    safety_score = structured_risk.get("safety_score_ai", round(10.0 - risk, 1))
                     
                     # Only notify zones with significant risk (e.g., risk >= 4 or safety <= 6)
-                    if risk >= 4.0:
+                    if risk >= 4.0 or safety_score <= 6.0:
                         shelter = entry.get("assigned_shelter", "TBD")
                         route = entry.get("assigned_route", "Direct")
                         

@@ -12,6 +12,7 @@ import PostAnalysis from "./pages/PostAnalysis";
 import { SocketProvider } from "./context/SocketContext";
 import SevereZoneOverlay from "./components/SevereZoneOverlay";
 import AnalysisPanel from "./components/AnalysisPanel";
+import IntelligencePipeline from "./pages/IntelligencePipeline";
 
 export default function App() {
   const [theme, setTheme] = useState("dark");
@@ -52,6 +53,7 @@ export default function App() {
           {/* Page Content */}
           <main className="p-6 flex-1 overflow-y-auto no-scrollbar bg-surface">
             <Routes>
+              <Route path="/pipeline" element={<IntelligencePipeline />} />
               <Route path="/" element={<Orchestration />} />
               <Route path="/route-plan" element={<RoutePlan />} />
               <Route path="/simulation" element={<SimulationMap />} />

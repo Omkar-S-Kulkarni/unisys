@@ -3,6 +3,7 @@ import json
 import asyncio
 import logging
 from typing import Optional
+from agents.safety_predictor import SafetyPredictor
 
 logger = logging.getLogger("RiskForecastAgent")
 
@@ -28,6 +29,9 @@ class RiskForecastAgent:
         self._risk_history = {}     # zone_name -> [last N scores] for time_to_critical
         self._last_structured_output = {}  # zone_name -> full structured output
         self._last_tick = 0
+        
+        # Phase 6: AI Safety Prediction (Hugging Face)
+        self._ai_predictor = SafetyPredictor()
 
         self._load_scenarios()
 
@@ -176,8 +180,15 @@ class RiskForecastAgent:
             confidence = self._compute_confidence(rainfall, water_level)
 
             scores[name] = score
+            
+            # AI-driven Safety Score (Hugging Face)
+            ai_safety = self._ai_predictor.predict_safety_score(
+                name, rainfall, water_level, elev, zone.get("population", 0)
+            )
+
             structured[name] = {
                 "risk_score": score,
+                "safety_score_ai": ai_safety,
                 "risk_level": self._risk_level_label(score),
                 "time_to_critical": ttc,
                 "confidence": confidence,

@@ -248,24 +248,24 @@ export default function SimulationMap() {
                                         dashArray={isCurrent ? "12, 8" : null}
                                     >
                                         <Popup>
-                                            <div className="text-sm font-bold text-white">{order.zoneName}</div>
-                                            <div className="text-xs text-slate-300">Shelter: {effectiveShelter?.name || order.assigned_shelter}</div>
-                                            <div className="text-xs text-slate-300">Risk: {order.risk_score?.toFixed(1)}</div>
-                                            <div className="text-xs text-slate-300">Batch: {order.humans}</div>
-                                            <div className="text-xs text-slate-300">Status: {isCurrent ? 'Active' : 'Pending'}</div>
+                                            <div className="text-sm font-bold text-slate-900">{order.zoneName}</div>
+                                            <div className="text-xs text-emerald-600 font-medium">Shelter: {effectiveShelter?.name || order.assigned_shelter}</div>
+                                            <div className="text-xs text-emerald-600 font-medium">Risk: {order.risk_score?.toFixed(1)}</div>
+                                            <div className="text-xs text-emerald-600 font-medium">Batch: {order.humans}</div>
+                                            <div className="text-xs text-emerald-600 font-medium">Status: {isCurrent ? 'Active' : 'Pending'}</div>
                                         </Popup>
                                     </Polyline>
                                     <Marker position={routePath[0]} icon={getZoneIcon(order.risk_score, false)}>
                                         <Popup>
-                                            <div className="text-sm font-bold">Zone {order.zoneName}</div>
-                                            <div className="text-xs text-slate-300">{isCurrent ? 'Active evacuation route' : 'Pending evacuation'}</div>
+                                            <div className="text-sm font-bold text-slate-900">Zone {order.zoneName}</div>
+                                            <div className="text-xs text-emerald-600 font-medium">{isCurrent ? 'Active evacuation route' : 'Pending evacuation'}</div>
                                         </Popup>
                                     </Marker>
                                     {effectiveShelter && (
                                         <Marker position={getLatLng(effectiveShelter.id)} icon={shelterIcon}>
                                             <Popup>
-                                                <div className="text-sm font-bold">Shelter {effectiveShelter.name}</div>
-                                                <div className="text-xs text-slate-300">Receiving evacuees</div>
+                                                <div className="text-sm font-bold text-slate-900">Shelter {effectiveShelter.name}</div>
+                                                <div className="text-xs text-emerald-600 font-medium">Receiving evacuees</div>
                                             </Popup>
                                         </Marker>
                                     )}
@@ -283,9 +283,9 @@ export default function SimulationMap() {
                                 return (
                                     <Marker key={`zone-marker-${zone.id || zone.name}`} position={coord} icon={getZoneIcon(risk, isEvacuated)}>
                                         <Popup>
-                                            <div className="text-sm font-bold">{zone.name || zone.id}</div>
-                                            <div className="text-xs text-slate-300">Status: {isEvacuated ? 'Evacuated' : 'Pending'}</div>
-                                            <div className="text-xs text-slate-300">Risk: {risk.toFixed(1)}</div>
+                                            <div className="text-sm font-bold text-slate-900">{zone.name || zone.id}</div>
+                                            <div className="text-xs text-emerald-600 font-medium">Status: {isEvacuated ? 'Evacuated' : 'Pending'}</div>
+                                            <div className="text-xs text-emerald-600 font-medium">Risk: {risk.toFixed(1)}</div>
                                         </Popup>
                                     </Marker>
                                 );
@@ -298,9 +298,9 @@ export default function SimulationMap() {
                             return (
                                 <Marker key={`shelter-${shelter.id}`} position={coord} icon={shelterIcon}>
                                     <Popup>
-                                        <div className="text-sm font-bold">{shelter.name}</div>
-                                        <div className="text-xs text-slate-300">Occupancy: {shelter.current_occupancy}/{shelter.capacity}</div>
-                                        <div className="text-xs text-slate-300">Load: {Math.min(shelter.load_pct, 100)}%</div>
+                                        <div className="text-sm font-bold text-slate-900">{shelter.name}</div>
+                                        <div className="text-xs text-emerald-600 font-medium">Occupancy: {shelter.current_occupancy}/{shelter.capacity}</div>
+                                        <div className="text-xs text-emerald-600 font-medium">Load: {Math.min(shelter.load_pct, 100)}%</div>
                                     </Popup>
                                 </Marker>
                             );

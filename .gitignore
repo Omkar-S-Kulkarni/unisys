@@ -69,6 +69,10 @@ pnpm-debug.log*
 *.graphml
 *.graphmlf
 data/
+frontend/src/*.zip
+frontend/src/data/*.json
+!frontend/src/data/city-model.json
+*.geojson
 
 # ─────────────────────────────────────────────
 # Project-Specific Runtime Artifacts
@@ -103,3 +107,6 @@ $RECYCLE.BIN/
 scratch/
 .gemini/
 .antigravity/
+*.osm.pbf
+*.pbf
+!southern-zone-260420.osm.pbf # Example of keeping a specific one if needed, otherwise ignore all
