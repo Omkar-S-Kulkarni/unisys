@@ -1,10 +1,29 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useGlobalSocket } from "../context/SocketContext";
 
 export default function Navbar({ theme, setTheme, onSevereClick, analysisMode, setAnalysisMode }) {
   const { sendCommand, simulationState } = useGlobalSocket();
   const { scenario, isRunning } = simulationState || {};
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (settingsRef.current && !settingsRef.current.contains(event.target)) {
+        setSettingsOpen(false);
+      }
+    };
+
+    if (settingsOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    } else {
+      document.removeEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [settingsOpen]);
 
   const handleScenarioChange = (newScenario) => {
     sendCommand("CHANGE_SCENARIO", newScenario);
@@ -22,11 +41,11 @@ export default function Navbar({ theme, setTheme, onSevereClick, analysisMode, s
     setSettingsOpen(false);
   };
 
-  const activeClass = "bg-primary text-black px-3 py-1 text-[10px] font-black tracking-wider shadow-[0_0_15px_rgba(170,255,220,0.3)] transition-all cursor-pointer";
-  const inactiveClass = "border border-gray-800 px-3 py-1 text-[10px] font-bold text-gray-500 hover:text-white hover:border-gray-600 cursor-pointer transition-all";
+  const activeClass = "bg-primary text-white dark:text-black px-3 py-1 text-[10px] font-black tracking-wider shadow-[0_0_15px_rgba(170,255,220,0.3)] transition-all cursor-pointer";
+  const inactiveClass = "border border-surface-border px-3 py-1 text-[10px] font-bold text-surface-muted hover:text-surface-foreground hover:border-gray-600 cursor-pointer transition-all";
 
   return (
-    <header className="flex justify-between items-center w-full px-6 py-3 border-b border-surface-border bg-surface/95 backdrop-blur-md sticky top-0 z-50">
+    <header className="flex justify-between items-center w-full px-6 py-3 border-b border-surface-border bg-surface-navbar backdrop-blur-md sticky top-0 z-[3000]">
 
       {/* LEFT SIDE */}
       <div className="flex items-center gap-8">
@@ -41,11 +60,11 @@ export default function Navbar({ theme, setTheme, onSevereClick, analysisMode, s
         </div>
 
         {/* Toggle */}
-        <div className="flex bg-[#121214] border border-gray-800 p-0.5 rounded-sm">
+        <div className="flex bg-surface-muted border border-surface-border p-0.5 rounded-sm">
           <button className="px-3 py-1 text-[10px] font-bold text-primary bg-primary/10 rounded-sm">
             SYNTHETIC
           </button>
-          <button className="px-3 py-1 text-[10px] font-bold text-gray-500 hover:text-white transition-colors">
+          <button className="px-3 py-1 text-[10px] font-bold text-surface-muted hover:text-surface-foreground transition-colors">
             REAL
           </button>
         </div>
@@ -68,48 +87,49 @@ export default function Navbar({ theme, setTheme, onSevereClick, analysisMode, s
       {/* RIGHT SIDE */}
       <div className="flex items-center gap-6">
         {/* Controls */}
-        <div className="flex items-center gap-3 border-r border-gray-800 pr-6">
+        <div className="flex items-center gap-3 border-r border-surface-border pr-6">
           <button
             onClick={() => handleControl("PLAY_SIMULATION")}
-            className={`transition-colors scale-90 ${isRunning ? "text-primary" : "text-gray-400 hover:text-[#aaffdc]"}`}>
+            className={`transition-colors scale-90 ${isRunning ? "text-primary" : "text-surface-muted hover:text-primary"}`}>
             ▶
           </button>
           <button
             onClick={() => handleControl("PAUSE_SIMULATION")}
-            className={`transition-colors scale-90 ${!isRunning ? "text-primary" : "text-gray-400 hover:text-[#aaffdc]"}`}>
+            className={`transition-colors scale-90 ${!isRunning ? "text-primary" : "text-surface-muted hover:text-primary"}`}>
             ❚❚
           </button>
           <button
             onClick={() => handleControl("STEP_SIMULATION")}
-            className="text-gray-400 hover:text-[#aaffdc] transition-colors scale-90 font-bold px-1"
+            className="text-surface-muted hover:text-primary transition-colors scale-90 font-bold px-1"
             title="Step Forward">
             +1
           </button>
-          <button className="text-gray-400 hover:text-[#aaffdc] transition-colors scale-90 text-sm border-l border-gray-800 pl-3">
+          <button className="text-surface-muted hover:text-primary transition-colors scale-90 text-sm border-l border-surface-border pl-3">
             ?
           </button>
         </div>
 
         {/* Icons */}
         <div className="flex items-center gap-5">
-          <div className="relative">
+          <div className="relative" ref={settingsRef}>
             <button
               onClick={() => setSettingsOpen((open) => !open)}
-              className="text-gray-400 cursor-pointer hover:text-white transition-colors text-base"
+              className="text-surface-muted cursor-pointer hover:text-surface-foreground transition-colors text-base"
               aria-label="Settings"
             >
               ⚙
             </button>
             {settingsOpen && (
-              <div className="absolute right-0 top-full mt-3 w-64 rounded-2xl border border-surface-border bg-surface-panel p-4 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl z-50">
-                <div className="mb-3 text-[10px] uppercase tracking-[0.32em] text-gray-400">
+              <div 
+                className="absolute right-0 top-full mt-3 w-64 rounded-2xl border border-surface-border bg-surface-navbar p-4 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl z-[2000]">
+                <div className="mb-3 text-[10px] uppercase tracking-[0.32em] text-surface-muted">
                   UI SETTINGS
                 </div>
                 <div className="space-y-3">
-                  <div className="rounded-2xl border border-gray-800/60 bg-surface-muted p-3">
+                  <div className="rounded-2xl border border-surface-border bg-surface-muted p-3">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <div className="text-[11px] uppercase tracking-[0.24em] text-gray-400">
+                        <div className="text-[11px] uppercase tracking-[0.24em] text-surface-muted">
                           Theme Mode
                         </div>
                         <div className="text-sm font-semibold text-surface-foreground">
@@ -118,16 +138,16 @@ export default function Navbar({ theme, setTheme, onSevereClick, analysisMode, s
                       </div>
                       <button
                         onClick={handleThemeToggle}
-                        className="rounded-full bg-primary px-3 py-1 text-[10px] font-black text-black transition-colors hover:bg-primary/90"
+                        className="rounded-full bg-primary px-3 py-1 text-[10px] font-black text-white dark:text-black transition-colors hover:bg-primary/90"
                       >
                         Switch
                       </button>
                     </div>
                   </div>
-                  <div className="rounded-2xl border border-gray-800/60 bg-surface-muted p-3">
+                  <div className="rounded-2xl border border-surface-border bg-surface-muted p-3">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <div className="text-[11px] uppercase tracking-[0.24em] text-gray-400">
+                        <div className="text-[11px] uppercase tracking-[0.24em] text-surface-muted">
                           Analysis Mode
                         </div>
                         <div className="text-sm font-semibold text-surface-foreground">
@@ -136,13 +156,13 @@ export default function Navbar({ theme, setTheme, onSevereClick, analysisMode, s
                       </div>
                       <button
                         onClick={() => setAnalysisMode(!analysisMode)}
-                        className={`rounded-full px-3 py-1 text-[10px] font-black transition-all ${analysisMode ? 'bg-indigo-600 text-white shadow-[0_0_10px_rgba(79,70,229,0.4)]' : 'bg-gray-800 text-gray-400'}`}
+                        className={`rounded-full px-3 py-1 text-[10px] font-black transition-all ${analysisMode ? 'bg-primary text-white dark:text-black shadow-[0_0_15px_rgba(37,99,235,0.2)]' : 'bg-surface-border text-surface-muted'}`}
                       >
                         {analysisMode ? "ON" : "OFF"}
                       </button>
                     </div>
                   </div>
-                  <div className="rounded-2xl border border-gray-800/60 bg-surface-muted p-3">
+                  <div className="rounded-2xl border border-surface-border bg-surface-muted p-3">
                     <div className="flex flex-col gap-2">
                        <div className="text-[11px] uppercase tracking-[0.24em] text-orange-400">
                           Emergency Actions
@@ -158,7 +178,7 @@ export default function Navbar({ theme, setTheme, onSevereClick, analysisMode, s
                        </button>
                     </div>
                   </div>
-                  <div className="rounded-2xl border border-gray-800/60 bg-surface-muted p-3 text-[11px] text-gray-400">
+                  <div className="rounded-2xl border border-surface-border bg-surface-muted p-3 text-[11px] text-surface-muted">
                     Use the settings menu to manage system alerts and switch between UI styles.
                   </div>
                 </div>
@@ -166,10 +186,10 @@ export default function Navbar({ theme, setTheme, onSevereClick, analysisMode, s
             )}
           </div>
           <div className="relative">
-            <span className="text-gray-400 cursor-pointer hover:text-white transition-colors text-base">
+            <span className="text-surface-muted cursor-pointer hover:text-surface-foreground transition-colors text-base">
               🔔
             </span>
-            <span className="absolute -top-1 -right-1 w-2 h-2 bg-orange-500 border border-[#0e0e10] rounded-full shadow-[0_0_8px_rgba(251,146,60,0.4)]"></span>
+            <span className="absolute -top-1 -right-1 w-2 h-2 bg-orange-500 border border-surface rounded-full shadow-[0_0_8px_rgba(251,146,60,0.4)]"></span>
           </div>
         </div>
 

@@ -13,6 +13,8 @@
     --surface-border: rgba(148, 163, 184, 0.18);
     --surface-foreground: #f9f5f8;
     --surface-muted-text: #94a3b8;
+    --surface-accent: rgba(170, 255, 220, 0.05);
+    --surface-navbar: rgba(14, 14, 16, 0.95);
   }
 
   html.light {
@@ -25,14 +27,17 @@
     --surface-border: rgba(15, 23, 42, 0.12);
     --surface-foreground: #0f172a;
     --surface-muted-text: #475569;
+    --surface-accent: rgba(37, 99, 235, 0.05);
+    --surface-navbar: #f0f7ff;
   }
 
   body {
     @apply antialiased;
     color: var(--surface-foreground);
     background-color: var(--surface);
-    background-image: radial-gradient(rgba(72, 71, 74, 0.12) 1px, transparent 0);
+    background-image: radial-gradient(var(--surface-muted-text) 0.5px, transparent 0);
     background-size: 24px 24px;
+    opacity: 0.8;
   }
 }
 
@@ -46,6 +51,14 @@
 
 .bg-surface-muted {
   background-color: var(--surface-muted);
+}
+
+.bg-surface-accent {
+  background-color: var(--surface-accent);
+}
+
+.bg-surface-navbar {
+  background-color: var(--surface-navbar);
 }
 
 .border-surface-border {

@@ -20,20 +20,20 @@ export default function IntelligencePipeline() {
   }, [data]);
 
   return (
-    <div className="flex flex-col h-full bg-[#0a0a0c] text-white p-6 space-y-6 overflow-y-auto no-scrollbar">
+    <div className="flex flex-col h-full bg-surface text-surface-foreground p-6 space-y-6 overflow-y-auto no-scrollbar">
       {/* Header */}
-      <div className="flex justify-between items-center border-b border-white/10 pb-4">
+      <div className="flex justify-between items-center border-b border-surface-border pb-4">
         <div className="flex flex-col">
           <h1 className="text-2xl font-black tracking-tighter uppercase">Intelligence_Data_Pipeline</h1>
-          <p className="text-xs font-mono text-primary tracking-[0.3em] uppercase opacity-70">Adeo_Core_Inference_Engine // Live_Monitoring</p>
+          <p className="text-xs font-mono text-primary tracking-[0.3em] uppercase">Adeo_Core_Inference_Engine // Live_Monitoring</p>
         </div>
         <div className="flex gap-6">
           <div className="text-right">
-            <div className="text-[10px] text-gray-500 font-black uppercase">System_Tick</div>
+            <div className="text-[10px] text-surface-muted font-black uppercase">System_Tick</div>
             <div className="text-lg font-mono text-emerald-400">TICK_{tick.toString().padStart(4, '0')}</div>
           </div>
           <div className="text-right">
-            <div className="text-[10px] text-gray-500 font-black uppercase">Engine_Status</div>
+            <div className="text-[10px] text-surface-muted font-black uppercase">Engine_Status</div>
             <div className="text-lg font-mono text-blue-400">STABLE</div>
           </div>
         </div>
@@ -44,13 +44,13 @@ export default function IntelligencePipeline() {
         {/* Column 1: Raw & Preprocessing */}
         <div className="space-y-6">
           {/* Raw Input Stream */}
-          <div className="bg-black/40 border border-white/10 rounded-xl p-5 space-y-4 relative overflow-hidden group">
+          <div className="bg-surface-panel border border-surface-border rounded-xl p-5 space-y-4 relative overflow-hidden group">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-transparent"></div>
             <h3 className="text-sm font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
               Raw_Sensor_Ingest
             </h3>
-            <div className="bg-black/60 rounded-lg p-4 font-mono text-[10px] text-blue-300/70 h-64 overflow-hidden relative border border-white/5">
+            <div className="bg-surface-muted rounded-lg p-4 font-mono text-[10px] text-primary/70 h-64 overflow-hidden relative border border-surface-border">
               <div className="animate-scrolling-text space-y-1">
                 {Array.from({length: 20}).map((_, i) => (
                   <div key={i}>
@@ -58,12 +58,12 @@ export default function IntelligencePipeline() {
                   </div>
                 ))}
               </div>
-              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/80 pointer-events-none"></div>
+              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-surface pointer-events-none"></div>
             </div>
           </div>
 
           {/* Data Refinery */}
-          <div className="bg-black/40 border border-white/10 rounded-xl p-5 space-y-4">
+          <div className="bg-surface-panel border border-surface-border rounded-xl p-5 space-y-4">
             <h3 className="text-sm font-black text-indigo-400 uppercase tracking-widest">Autonomous_Preprocessing_Steps</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {[
@@ -71,9 +71,9 @@ export default function IntelligencePipeline() {
                 { title: 'Flood_Normalization', desc: 'SCALING_VECTOR_V1', stat: '98.4%' },
                 { title: 'Priority_Weighting', desc: 'HEURISTIC_SCORE_ENGINE', stat: 'ACTIVE' }
               ].map((step, i) => (
-                <div key={i} className="bg-white/5 border border-white/5 p-4 rounded-lg flex flex-col gap-2 group hover:border-indigo-500/50 transition-all">
+                <div key={i} className="bg-surface-muted border border-surface-border p-4 rounded-lg flex flex-col gap-2 group hover:border-indigo-500/50 transition-all">
                   <span className="text-[10px] font-black text-indigo-400">{step.title}</span>
-                  <span className="text-[8px] font-mono text-gray-500 uppercase">{step.desc}</span>
+                  <span className="text-[8px] font-mono text-surface-muted uppercase">{step.desc}</span>
                   <div className="mt-2 text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded w-fit">{step.stat}</div>
                 </div>
               ))}
@@ -84,7 +84,7 @@ export default function IntelligencePipeline() {
         {/* Column 2: LLM & Zonal Output */}
         <div className="space-y-6">
           {/* Neural Processing Terminal (Replaces LLM Core) */}
-          <div className="bg-black/60 border border-purple-500/30 rounded-xl p-0 relative overflow-hidden h-[300px] flex flex-col shadow-[0_0_30px_rgba(168,85,247,0.1)]">
+          <div className="bg-surface-panel border border-purple-500/30 rounded-xl p-0 relative overflow-hidden h-[300px] flex flex-col shadow-[0_0_30px_rgba(168,85,247,0.1)]">
             {/* Terminal Header */}
             <div className="bg-purple-500/10 border-b border-purple-500/20 px-4 py-2 flex justify-between items-center">
               <div className="flex items-center gap-2">
@@ -110,7 +110,7 @@ export default function IntelligencePipeline() {
                  <div className="text-purple-400 opacity-80">{`[SYSTEM] Initializing weight matrix... DONE`}</div>
                  <div className="text-emerald-500/70 font-mono">{`[GIN] 2026/04/30 - 13:54:26 | 200 | 14.205s | 127.0.0.1 | POST "/api/generate"`}</div>
                  <div className="text-blue-400">{`> PROMPT_IN: "Evaluate Z07 flood risk based on sensor_77.68"`}</div>
-                 <div className="text-gray-300 pl-4">{`[THINKING] Analyzing hydrology vectors... Cross-referencing OSM road network...`}</div>
+                 <div className="text-surface-muted pl-4">{`[THINKING] Analyzing hydrology vectors... Cross-referencing OSM road network...`}</div>
                  <div className="text-emerald-500/70 font-mono">{`[GIN] 2026/04/30 - 13:54:32 | 200 |  5.787s | 127.0.0.1 | POST "/api/generate"`}</div>
                  <div className="text-emerald-400">{`> RESPONSE: "Z07 risk high (9.2). Critical blockage at Z07_ORR_INTERSECTION. Priority 1 evacuation suggested."`}</div>
                  <div className="text-emerald-500/70 font-mono">{`[GIN] 2026/04/30 - 13:54:48 | 200 |  2.855ms| 127.0.0.1 | GET  "/api/tags"`}</div>
@@ -118,13 +118,13 @@ export default function IntelligencePipeline() {
                  <div className="text-purple-400 opacity-80">{`[SYSTEM] Context window optimized (4096 tokens)`}</div>
                  <div className="text-emerald-500/70 font-mono">{`[GIN] 2026/04/30 - 13:55:11 | 200 | 12.797s | 127.0.0.1 | POST "/api/generate"`}</div>
                  <div className="text-blue-400">{`> PROMPT_IN: "Recalculate route efficiency for Z08_S01"`}</div>
-                 <div className="text-gray-300 pl-4">{`[THINKING] Traversing Dijsktra-Ollivier mesh... Calculating congestion delta...`}</div>
+                 <div className="text-surface-muted pl-4">{`[THINKING] Traversing Dijsktra-Ollivier mesh... Calculating congestion delta...`}</div>
                  <div className="text-emerald-500/70 font-mono">{`[GIN] 2026/04/30 - 13:55:21 | 200 |  2.659ms| 127.0.0.1 | GET  "/api/tags"`}</div>
                  <div className="text-emerald-400">{`> RESPONSE: "Route optimal. Expected latency 4.2m per unit."`}</div>
                  
                  <div className="text-red-500/70 font-mono">{`[GIN] 2026/04/30 - 13:55:36 | 500 | 14.979s | 127.0.0.1 | POST "/api/generate"`}</div>
                  <div className="text-yellow-400">{`[WARN] Model temp spike: 0.85 -> 0.92 | Adjusting...`}</div>
-                 <div className="text-gray-500 font-mono">{`time=2026-04-30T14:02:51.602+05:30 level=INFO source=server.go:444 msg="starting runner" cmd="ollama.exe runner --ollama-engine --port 57477"`}</div>
+                 <div className="text-surface-muted font-mono">{`time=2026-04-30T14:02:51.602+05:30 level=INFO source=server.go:444 msg="starting runner" cmd="ollama.exe runner --ollama-engine --port 57477"`}</div>
                  <div className="text-purple-400 opacity-80">{`[SYSTEM] KV_Cache sync complete.`}</div>
                  
                  <div className="text-emerald-500/70 font-mono">{`[GIN] 2026/04/30 - 14:08:21 | 200 | 14.539ms| 127.0.0.1 | GET  "/api/tags"`}</div>
@@ -158,9 +158,9 @@ export default function IntelligencePipeline() {
           </div>
 
           {/* Zonal Division & Risk Grid */}
-          <div className="bg-black/40 border border-white/10 rounded-xl p-5 space-y-4">
+          <div className="bg-surface-panel border border-surface-border rounded-xl p-5 space-y-4">
             <div className="flex justify-between items-center">
-              <h3 className="text-sm font-black text-emerald-400 uppercase tracking-widest">Tactical_Zonal_Stratification</h3>
+              <h3 className="text-sm font-black text-primary uppercase tracking-widest">Tactical_Zonal_Stratification</h3>
               <span className="text-[10px] font-mono text-emerald-500/50">12_NODES_DETECTION</span>
             </div>
             
@@ -183,11 +183,11 @@ export default function IntelligencePipeline() {
                     className={`p-3 rounded-lg border flex flex-col items-center justify-center gap-1 transition-all group hover:scale-105 cursor-pointer ${
                       risk >= 9 ? 'bg-red-500/20 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)]' :
                       risk >= 7 ? 'bg-orange-500/20 border-orange-500/50' :
-                      'bg-white/5 border-white/10'
+                      'bg-surface-muted border-surface-border'
                     }`}
                   >
-                    <span className="text-xs font-black text-white group-hover:text-primary transition-colors">{id}</span>
-                    <div className="text-[10px] font-mono font-bold text-gray-400">{risk.toFixed(1)}</div>
+                    <span className="text-xs font-black text-surface-foreground group-hover:text-primary transition-colors">{id}</span>
+                    <div className="text-[10px] font-mono font-bold text-surface-muted">{risk.toFixed(1)}</div>
                   </div>
                 );
               })}
@@ -199,25 +199,25 @@ export default function IntelligencePipeline() {
 
       {/* Footer / Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
-        <div className="bg-white/5 border border-white/5 p-4 rounded-xl flex items-center gap-4">
+        <div className="bg-surface-panel border border-surface-border p-4 rounded-xl flex items-center gap-4">
            <div className="text-3xl">🎯</div>
            <div className="flex flex-col">
-             <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Target_Acquisition</span>
-             <span className="text-sm font-bold text-white uppercase">Top 3 Critical Zones identified</span>
+             <span className="text-[10px] font-black text-surface-muted uppercase tracking-widest">Target_Acquisition</span>
+             <span className="text-sm font-bold text-surface-foreground uppercase">Top 3 Critical Zones identified</span>
            </div>
         </div>
-        <div className="bg-white/5 border border-white/5 p-4 rounded-xl flex items-center gap-4">
+        <div className="bg-surface-panel border border-surface-border p-4 rounded-xl flex items-center gap-4">
            <div className="text-3xl">⚖️</div>
            <div className="flex flex-col">
-             <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Decision_Governance</span>
-             <span className="text-sm font-bold text-white uppercase">Automated Route Prioritization</span>
+             <span className="text-[10px] font-black text-surface-muted uppercase tracking-widest">Decision_Governance</span>
+             <span className="text-sm font-bold text-surface-foreground uppercase">Automated Route Prioritization</span>
            </div>
         </div>
-        <div className="bg-white/5 border border-white/5 p-4 rounded-xl flex items-center gap-4">
+        <div className="bg-surface-panel border border-surface-border p-4 rounded-xl flex items-center gap-4">
            <div className="text-3xl">🛡️</div>
            <div className="flex flex-col">
-             <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">System_Safety</span>
-             <span className="text-sm font-bold text-white uppercase">Zero Failure Pathfinding Active</span>
+             <span className="text-[10px] font-black text-surface-muted uppercase tracking-widest">System_Safety</span>
+             <span className="text-sm font-bold text-surface-foreground uppercase">Zero Failure Pathfinding Active</span>
            </div>
         </div>
       </div>

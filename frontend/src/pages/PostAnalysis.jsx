@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useGlobalSocket } from '../context/SocketContext';
 
 const StatCard = ({ label, value, sub, color }) => (
-  <div className="bg-[#111114] border border-gray-800 p-6 flex flex-col justify-between">
-    <div className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em] mb-4">{label}</div>
-    <div className={`text-4xl font-black ${color || 'text-gray-100'} font-mono mb-2`}>{value}</div>
-    <div className="text-[10px] text-gray-600 font-mono tracking-tighter">{sub}</div>
+  <div className="bg-surface-panel border border-surface-border p-6 flex flex-col justify-between">
+    <div className="text-[10px] text-surface-muted font-bold uppercase tracking-[0.2em] mb-4">{label}</div>
+    <div className={`text-4xl font-black ${color || 'text-surface-foreground'} font-mono mb-2`}>{value}</div>
+    <div className="text-[10px] text-surface-muted font-mono tracking-tighter">{sub}</div>
   </div>
 );
 
@@ -64,10 +64,10 @@ export default function PostAnalysis() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 py-4 pb-20">
-      <div className="flex justify-between items-end border-b border-gray-800 pb-4">
+      <div className="flex justify-between items-end border-b border-surface-border pb-4">
         <div>
-          <h1 className="text-3xl font-black text-gray-100 tracking-tight uppercase">Simulation Summary</h1>
-          <p className="text-[10px] text-gray-500 font-mono tracking-widest mt-1">POST_EVENT_RECON // ID_{Math.floor(Math.random() * 9000) + 1000}</p>
+          <h1 className="text-3xl font-black text-surface-foreground tracking-tight uppercase">Simulation Summary</h1>
+          <p className="text-[10px] text-surface-muted font-mono tracking-widest mt-1">POST_EVENT_RECON // ID_{Math.floor(Math.random() * 9000) + 1000}</p>
         </div>
         <button
           onClick={fetchSummary}
@@ -112,16 +112,16 @@ export default function PostAnalysis() {
 
       <div className="grid grid-cols-3 gap-8">
         <div className="col-span-2 space-y-6">
-          <div className="bg-[#111114] border border-gray-800 p-8 relative overflow-hidden">
+          <div className="bg-surface-panel border border-surface-border p-8 relative overflow-hidden">
             <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
               <span className="text-8xl font-black">AI</span>
             </div>
-            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+            <h2 className="text-sm font-bold text-surface-muted uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
               <span className="w-2 h-2 bg-violet-500 rounded-full animate-pulse"></span>
               Tactical LLM Evaluation
             </h2>
             <div className="prose prose-invert max-w-none">
-              <div className="text-gray-300 font-serif text-lg leading-relaxed space-y-4">
+              <div className="text-surface-foreground font-serif text-lg leading-relaxed space-y-4">
                 {summary?.summary?.split('\n').map((para, i) => (
                   <p key={i}>{para}</p>
                 )) || "No summary generated yet."}
@@ -131,23 +131,23 @@ export default function PostAnalysis() {
         </div>
 
         <div className="space-y-6">
-          <div className="bg-[#111114] border border-gray-800 p-6">
-            <h2 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4">Critical Events Log</h2>
+          <div className="bg-surface-panel border border-surface-border p-6">
+            <h2 className="text-[10px] font-bold text-surface-muted uppercase tracking-widest mb-4">Critical Events Log</h2>
             <div className="space-y-4 overflow-y-auto max-h-[400px] no-scrollbar">
               {summary?.events?.length > 0 ? summary.events.map((ev, i) => (
                 <div key={i} className="border-l-2 border-primary/30 pl-4 py-1">
-                  <div className="text-[9px] text-gray-600 font-mono mb-1">TICK {ev.tick}</div>
-                  <div className="text-[10px] text-gray-300 font-bold leading-tight">{ev.message}</div>
+                  <div className="text-[9px] text-surface-muted font-mono mb-1">TICK {ev.tick}</div>
+                  <div className="text-[10px] text-surface-foreground font-bold leading-tight">{ev.message}</div>
                 </div>
               )) : (
-                <div className="text-[10px] text-gray-600 italic">No critical events reported.</div>
+                <div className="text-[10px] text-surface-muted italic">No critical events reported.</div>
               )}
             </div>
           </div>
 
           <div className="bg-primary/5 border border-primary/20 p-6">
             <h2 className="text-[10px] font-bold text-primary uppercase tracking-widest mb-2">Final Recommendation</h2>
-            <p className="text-[11px] text-gray-400 leading-relaxed italic">
+            <p className="text-[11px] text-surface-muted leading-relaxed italic">
               {summary?.recommendation || "System recommends immediate debriefing based on current metrics."}
             </p>
           </div>
