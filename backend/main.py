@@ -1,6 +1,9 @@
 import sys
 import os
 import logging
+from dotenv import load_dotenv
+load_dotenv()
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import asyncio
 import json
@@ -37,12 +40,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class TickFormatter(logging.Formatter):
+    def format(self, record):
+        if not hasattr(record, 'tick'):
+            record.tick = '?'
+        return super().format(record)
+
 logger = logging.getLogger("ADEOBackend")
 if not logger.handlers:
     handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter("[%(name)s][%(levelname)s][tick=%(tick)s] %(message)s"))
+    handler.setFormatter(TickFormatter("[%(name)s][%(levelname)s][tick=%(tick)s] %(message)s"))
     logger.addHandler(handler)
     logger.setLevel(logging.INFO)
+
 
 
 def _log_validation_errors(source: str, errors: list[dict], tick: int = 0) -> None:
@@ -95,16 +105,24 @@ decision_governor = DecisionGovernor(config=config, city_model=city_model)
 risk_agent = RiskForecastAgent(os.path.join(_ROOT, "agents", "data"), ollama_client=ollama_client)
 
 # ── Initialize Twilio Client ──────────────────────────────────────────────────
-twilio_config = config.get("twilio", {})
-twilio_enabled = twilio_config.get("enabled", False) and Client is not None
+twilio_enabled = os.getenv("TWILIO_ENABLED", "false").lower() == "true" and Client is not None
+twilio_config = {
+    "account_sid": os.getenv("TWILIO_ACCOUNT_SID"),
+    "auth_token": os.getenv("TWILIO_AUTH_TOKEN"),
+    "from_number": os.getenv("TWILIO_FROM_NUMBER"),
+    "to_number": os.getenv("TWILIO_TO_NUMBER")
+}
+
 if twilio_enabled and Client:
     try:
         twilio_client = Client(twilio_config["account_sid"], twilio_config["auth_token"])
+        logger.info("Twilio Client initialized successfully.")
     except Exception as e:
         logger.warning(f"Failed to initialize Twilio: {e}")
         twilio_client = None
 else:
     twilio_client = None
+
 
 async def send_twilio_notification(zone_name, safety_score, shelter_name, route_name):
     if not twilio_client:
